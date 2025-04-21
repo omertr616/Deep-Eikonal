@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "project2",
+			"path": "."
+		},
+		{
+			"name": "utils",
+			"path": "../project/deep_eikonal_revisit/utils"
+		},
+		{
+			"name": "models",
+			"path": "../project/deep_eikonal_revisit/models"
+		}
+	],
+	"settings": {}
+}
