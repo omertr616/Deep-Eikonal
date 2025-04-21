@@ -11,7 +11,7 @@ import os
 # ---------- Config ----------
 data_path = "generated_spheres/train_spheres"
 ring = 3
-epochs = 100
+epochs = 20
 batch_size = 16
 lr = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -21,8 +21,8 @@ dataset = SphereDataset(data_path, ring_size=ring, precompute_neighbors=True)
 loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # ---------- Model ----------
-#model = SpherePointNetRing(ring=ring, input_channels=4).to(device)
-model = SpherePointNetRingCos(ring=ring, input_channels=94).to(device)
+model = SpherePointNetRing(ring=ring, input_channels=4).to(device)
+# model = SpherePointNetRingCos(ring=ring, input_channels=94).to(device)
 
 # ---------- Loss and Optimizer ----------
 criterion = nn.MSELoss()

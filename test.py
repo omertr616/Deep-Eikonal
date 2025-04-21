@@ -10,11 +10,12 @@ from scipy.sparse import csr_matrix
 from models.sphere_models import SpherePointNetRing
 
 global_local_solver = None
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def make_sphere(radius=1.0, theta_resolution=100, phi_resolution=100):
-    # sphere = pv.Sphere(radius=radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
-    sphere = pv.Icosphere(radius=10, nsub=4)  # More uniform
+def make_sphere(radius=1.0, nsub=3):
+    # sphere = pv.Sphere(radius=radius, theta_resolution=theta_resolution//2, phi_resolution=phi_resolution)
+    sphere = pv.Icosphere(radius=radius, nsub=nsub)  # More uniform
 
     points = sphere.points.astype(np.float32)
     faces = sphere.faces.reshape(-1, 4)[:, 1:]
@@ -97,22 +98,23 @@ def local_solver_regular_FMM(p, graph, status, u, points):
                 min_val = candidate
     return min_val
 
-idxxx = 1
+
+
 
 def local_solver_model_ring3(p, graph, status, u, points): #fast
-    visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points)  # shape: (4, N) with N ≤ 90
-    
-    # global idxxx
-    # idxxx += 1
-    # if idxxx < 50000000:
-    #     print(visited_neighbors.shape)
-    
+    visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points).to(device)  # shape: (4, N) with N ≤ 90
     num_valid = visited_neighbors.shape[1]
     visited_neighbors_padded = F.pad(visited_neighbors, (0, 90 - num_valid), "constant", 0).unsqueeze(0)  # (1, 4, 90)
     mask = torch.zeros(90, dtype=torch.float32)
     mask[:num_valid] = 1
     mask = mask.unsqueeze(0)  # (1, 90)
     point_xyz = torch.tensor(points[p], dtype=torch.float32).unsqueeze(0)  # (1, 3)
+    
+    # Move to GPU if available
+    visited_neighbors_padded = visited_neighbors_padded.to(device)
+    point_xyz = point_xyz.to(device)
+    mask = mask.to(device)
+    
     distance_estimation = global_local_solver(visited_neighbors_padded, point_xyz, mask).item()
     return distance_estimation
 
@@ -199,35 +201,31 @@ def true_distances(points, radius, source_idx):
     true_distances = radius * np.arccos(cosines)
     return true_distances
 
-#resolutions = [207, 104, 69, 52, 40]
-#resolutions = [104, 69, 52, 40]
-resolutions = [69, 52, 40]
-resolutions = [40]
-resolutions = [10]
-resolutions = [5]
-resolutions = [69, 52, 30, 20] #good with fast
-resolutions = [104]
+
+resolutions = [1, 2, 3, 4, 5, 6]
 h_vals = []
 l1_errors_regular_FMM = []
 l1_errors_saar_model = []
-for r in resolutions:
-    print(f"Resolution: {r}")
+for nsub in resolutions:
+    print(f"Resolution: {nsub}")
     #points = coordinates of each point
     #graph = (number of node a, number of node b, edge length between a and b)
-    graph, faces, points, sphere, h = make_sphere(radius=10, theta_resolution=r, phi_resolution=r)
+    graph, faces, points, sphere, h = make_sphere(radius=10, nsub=nsub) #radius=10, nsub=r
     source_idxs = [3, 10, 15, 20] 
     print(f"h: {h}")
 
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
-    checkpoint = torch.load("checkpoints/Good_sphere_pointNet_100spheres_100epochs.pt", map_location=torch.device('cpu'))
+    checkpoint = torch.load("checkpoints/sphere_pointnet_epoch19_loss7.947308459384098e-05.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
+    local_solver = local_solver.to(device)
     local_solver.eval()
     global_local_solver = local_solver #make it global
 
     l1_losses_regular_FMM = []
     l1_losses_saar_model = []
     for source_idx in source_idxs:
+        # print(f"Source index: {source_idx}")
         distances_regular_FMM = FMM_with_local_solver(graph, points, [source_idx], local_solver_regular_FMM)
         distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
         true_geodesic = true_distances(points, 10, source_idx)
@@ -251,3 +249,5 @@ print(f"h values: {h_vals}")
 print(f"Average slope: {average_slope_regular_FMM:.3f}")
 print(f"Average slope: {average_slope_saar_model:.3f}")
 plot_errors(h_vals, l1_errors_regular_FMM, l1_errors_saar_model)
+print(f"l1_errors_regular_FMM: {l1_errors_regular_FMM}")
+print(f"l1_errors_saar_model: {l1_errors_saar_model}")
