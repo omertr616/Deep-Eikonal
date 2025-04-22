@@ -202,7 +202,8 @@ def true_distances(points, radius, source_idx):
     return true_distances
 
 
-resolutions = [1, 2, 3, 4, 5, 6]
+resolutions = [4,3,2,1]
+radius = 1
 h_vals = []
 l1_errors_regular_FMM = []
 l1_errors_saar_model = []
@@ -210,13 +211,13 @@ for nsub in resolutions:
     print(f"Resolution: {nsub}")
     #points = coordinates of each point
     #graph = (number of node a, number of node b, edge length between a and b)
-    graph, faces, points, sphere, h = make_sphere(radius=10, nsub=nsub) #radius=10, nsub=r
+    graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
     source_idxs = [3, 10, 15, 20] 
     print(f"h: {h}")
 
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
-    checkpoint = torch.load("checkpoints/sphere_pointnet_epoch19_loss7.947308459384098e-05.pt", map_location=device)
+    checkpoint = torch.load("checkpoints/ico_radius_1-10.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
     local_solver = local_solver.to(device)
     local_solver.eval()
@@ -228,7 +229,7 @@ for nsub in resolutions:
         # print(f"Source index: {source_idx}")
         distances_regular_FMM = FMM_with_local_solver(graph, points, [source_idx], local_solver_regular_FMM)
         distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
-        true_geodesic = true_distances(points, 10, source_idx)
+        true_geodesic = true_distances(points, radius, source_idx)
         l1_losses_regular_FMM.append(np.mean(np.abs(distances_regular_FMM - true_geodesic)))
         l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
         #sphere["GeodesicDistance"] = distances_regular_FMM

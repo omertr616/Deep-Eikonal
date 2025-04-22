@@ -10,7 +10,7 @@ import random
 # ---------- Config ----------
 OUTPUT_DIR = "generated_spheres/train_spheres"
 NUM_SPHERES = 100
-RADIUS = [1, 2, 3]
+RADIUS = range(1,20)  # Sphere radii
 H_RANGE = (0.05, 11)  # Desired mean edge length range
 RES_RANGE = (3, 210)   # Theta/phi resolution search space
 SEED = 42

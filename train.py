@@ -11,7 +11,7 @@ import os
 # ---------- Config ----------
 data_path = "generated_spheres/train_spheres"
 ring = 3
-epochs = 20
+epochs = 100
 batch_size = 16
 lr = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
