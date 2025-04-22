@@ -46,6 +46,15 @@ def make_sphere(radius=1.0, nsub=3):
 
     return graph, faces, points, sphere, h
 
+def make_spheres_radiuses_set(nsub=4):   #to calculate desired h and get r,nsub
+    graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
+    radiuses = ((np.arange(1, 16) / 10) / h)  #here we change
+    nsub_radises = [(r, nsub) for r in radiuses] 
+
+    return nsub_radises
+
+make_spheres_radiuses_set(2)
+
 
 def plot_errors(h_values, errors_regular_FMM, errors_saar_model):
     plt.figure()
@@ -57,13 +66,6 @@ def plot_errors(h_values, errors_regular_FMM, errors_saar_model):
     plt.grid(True, which='both')
     plt.legend()
     plt.show()
-
-
-# Plotting
-#sphere["GeodesicDistance"] = distances
-#sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-
-#----------------------------Plot for the model----------------------------
 
 
 def get_3_ring_visited_neighbors(p, graph, status, u, points):
@@ -143,7 +145,13 @@ def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver
 
         for neighbor in graph[p].nonzero()[1]:
             if status[neighbor] == 'Unvisited' or status[neighbor] == 'Wavefront': #Omer added
-                status[neighbor] = 'Wavefront'
+                if status[neighbor] == 'Unvisited':
+                    status[neighbor] = 'Wavefront'
+                    u[neighbor] = u[p] + graph[p, neighbor]
+                else:
+                    new_distance = u[p] + graph[p, neighbor]
+                    if new_distance < u[neighbor]:
+                        u[neighbor] = new_distance
                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
     return u
 
@@ -192,32 +200,67 @@ def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver
 
 
 
+# def true_distances(points, radius, source_idx):
+#     source = points[source_idx]
+#     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
+#     norm_source = source / np.linalg.norm(source)
+#     cosines = norm_points @ norm_source
+#     cosines = np.clip(cosines, -1.0, 1.0)
+#     true_distances = radius * np.arccos(cosines)
+#     return true_distances
+
+# def true_distances(points, radius, source_idx):
+#     points = points.astype(np.float64)
+#     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
+#     norm_source = norm_points[source_idx]
+#     cosines = np.sum(norm_points * norm_source, axis=1)
+#     cosines = np.clip(cosines, -1.0, 1.0)
+#     true_distances = radius * np.arccos(cosines)
+#     true_distances[source_idx] = 0.0
+
+#     return true_distances
+
 def true_distances(points, radius, source_idx):
-    source = points[source_idx]
+    points = points.astype(np.float64)
     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
-    norm_source = source / np.linalg.norm(source)
-    cosines = norm_points @ norm_source
+    norm_source = norm_points[source_idx:source_idx+1]
+    cosines = np.einsum('ij,ij->i', norm_points, norm_source)
     cosines = np.clip(cosines, -1.0, 1.0)
-    true_distances = radius * np.arccos(cosines)
-    return true_distances
+    dists = radius * np.arccos(cosines)
+    dists[source_idx] = 0.0
+    return dists
 
+nsub_radius = [(0.33518611916632424, 2),
+ (0.6703722383326485, 2),
+ (1.0055583574989726, 2),
+ (1.340744476665297, 2),
+ (1.675930595831621, 2),
+ (2.011116714997945, 2),
+ (2.3463028341642693, 2),
+ (2.681488953330594, 2),
+ (3.016675072496918, 2),
+ (3.351861191663242, 2),
+ (3.6870473108295667, 2),
+ (4.02223342999589, 2),
+ (4.357419549162215, 2),
+ (4.692605668328539, 2),
+ (5.027791787494864, 2)] #(radius, nsub)
 
-resolutions = [4,3,2,1]
-radius = 1
 h_vals = []
 l1_errors_regular_FMM = []
 l1_errors_saar_model = []
-for nsub in resolutions:
-    print(f"Resolution: {nsub}")
+for n_r in nsub_radius:
+    radius = n_r[0]
+    nsub = n_r[1]
     #points = coordinates of each point
     #graph = (number of node a, number of node b, edge length between a and b)
     graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-    source_idxs = [3, 10, 15, 20] 
+    source_idxs = [3] #indices of the source points
     print(f"h: {h}")
 
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
-    checkpoint = torch.load("checkpoints/ico_radius_1-10.pt", map_location=device)
+    checkpoint = torch.load("checkpoints/Good_sphere_pointNet_100spheres_100epochs.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
     local_solver = local_solver.to(device)
     local_solver.eval()
@@ -232,6 +275,8 @@ for nsub in resolutions:
         true_geodesic = true_distances(points, radius, source_idx)
         l1_losses_regular_FMM.append(np.mean(np.abs(distances_regular_FMM - true_geodesic)))
         l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
+        #sphere["GeodesicDistance"] = true_geodesic
+        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
         #sphere["GeodesicDistance"] = distances_regular_FMM
         #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
         #sphere["GeodesicDistance"] = distances_saar_model
@@ -245,10 +290,10 @@ for nsub in resolutions:
 
 
 average_slope_regular_FMM = np.mean(np.diff(l1_errors_regular_FMM) / np.diff(h_vals))
-average_slope_saar_model = np.mean(np.diff(l1_errors_saar_model) / np.diff(h_vals))
+#average_slope_saar_model = np.mean(np.diff(l1_errors_saar_model) / np.diff(h_vals))
 print(f"h values: {h_vals}")
 print(f"Average slope: {average_slope_regular_FMM:.3f}")
-print(f"Average slope: {average_slope_saar_model:.3f}")
+#print(f"Average slope: {average_slope_saar_model:.3f}")
 plot_errors(h_vals, l1_errors_regular_FMM, l1_errors_saar_model)
 print(f"l1_errors_regular_FMM: {l1_errors_regular_FMM}")
 print(f"l1_errors_saar_model: {l1_errors_saar_model}")
