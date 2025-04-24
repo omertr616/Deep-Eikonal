@@ -9,14 +9,9 @@ import random
 
 # ---------- Config ----------
 OUTPUT_DIR = "generated_spheres/train_spheres"
-NUM_SPHERES = 100
-RADIUS = range(1,20)  # Sphere radii
-H_RANGE = (0.05, 11)  # Desired mean edge length range
-RES_RANGE = (3, 210)   # Theta/phi resolution search space
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
-
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -48,15 +43,6 @@ def make_sphere(radius=1, nsub=4):
 
     return graph, faces, points, sphere, h
 
-
-# def true_distances(points, radius, source_idx):
-#     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
-#     norm_source = points[source_idx] / np.linalg.norm(points[source_idx])
-#     cosines = np.sum(norm_points.astype(np.float64) * norm_source.astype(np.float64), axis=1)
-#     cosines = np.clip(cosines, -1.0, 1.0) 
-#     true_distances = radius * np.arccos(cosines)
-#     return true_distances
-
 def true_distances(points, radius, source_idx):
     points = points.astype(np.float64)
     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
@@ -68,75 +54,70 @@ def true_distances(points, radius, source_idx):
 
     return true_distances
 
+def make_spheres_radiuses_set(nsub=4, start_h=0.1, end_h=1.6, step=0.1):   #to calculate desired h and get r,nsub
+    graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
+    radiuses = (np.arange(start_h, end_h, step) / h)  #here we change
+    nsub_radises = [(r, nsub) for r in radiuses] 
 
+    return nsub_radises
 
-def generate_dataset(num_spheres, save_dir):
-    for radius in RADIUS:
-        for nsub in [1,2,3,4,5]:
-            graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
+def generate_dataset(save_dir):
+    for i in range (2, 6): #range for nsub
+        nsub_radius = make_spheres_radiuses_set(nsub=i, start_h=0.1, end_h=1.6, step=0.1)
+        for radius, nsub in nsub_radius: #for the specific nsub, play with the radius to get h between 0.1 and something
+            for j in range(10): #make x random sources for this ball
+                graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
+                source_idx = random.randint(0, len(points) - 1)
+                distances = true_distances(points, radius, source_idx)
 
-            source_idx = random.randint(0, len(points) - 1)
-            distances = true_distances(points, radius, source_idx)
+                filename = f"sphere_radius_{radius}_nsub_{nsub}_source_{source_idx}.txt"
+                filepath = os.path.join(save_dir, filename)
 
-            filename = f"sphere_radius_{radius}_nsub_{nsub}.txt"
-            filepath = os.path.join(save_dir, filename)
+                with open(filepath, "w") as f:
+                    f.write(f"source_idx: {source_idx}\n")
+                    f.write(f"h_value: {h:.6f}\n\n")
 
-            with open(filepath, "w") as f:
-                f.write(f"source_idx: {source_idx}\n")
-                f.write(f"h_value: {h:.6f}\n\n")
+                    f.write("points:\n")
+                    for p, d in zip(points, distances):
+                        f.write(f"{p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f}, {d:.6f}\n")
 
-                f.write("points:\n")
-                for p, d in zip(points, distances):
-                    f.write(f"{p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f}, {d:.6f}\n")
+                    f.write("\ngraph:\n")
+                    coo = graph.tocoo()
+                    for a, b, w in zip(coo.row, coo.col, coo.data):
+                        if a < b:  # write each edge once
+                            f.write(f"{a}, {b}, {w:.6f}\n")
 
-                f.write("\ngraph:\n")
-                coo = graph.tocoo()
-                for a, b, w in zip(coo.row, coo.col, coo.data):
-                    if a < b:  # write each edge once
-                        f.write(f"{a}, {b}, {w:.6f}\n")
-
-            print(f"✓ Saved {filename} (h = {h:.3f}, points = {len(points)})")
-
-
-# def generate_dataset(num_spheres, save_dir):
-#     count = 0
-#     attempts = 0
-#     max_attempts = num_spheres * 10  # stop if too many failed attempts
-
-#     while count < num_spheres and attempts < max_attempts:
-#         attempts += 1
-#         resolution = random.randint(*RES_RANGE)
-#         graph, faces, points, sphere, h = make_sphere(radius=RADIUS, theta_resolution=resolution, phi_resolution=resolution)
-
-#         if not (H_RANGE[0] < h < H_RANGE[1]):
-#             continue  # Skip if h is out of desired range
-
-#         source_idx = random.randint(0, len(points) - 1)
-#         distances = true_distances(points, RADIUS, source_idx)
-
-#         filename = f"sphere_{count:03d}.txt"
-#         filepath = os.path.join(save_dir, filename)
-
-#         with open(filepath, "w") as f:
-#             f.write(f"source_idx: {source_idx}\n")
-#             f.write(f"h_value: {h:.6f}\n\n")
-
-#             f.write("points:\n")
-#             for p, d in zip(points, distances):
-#                 f.write(f"{p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f}, {d:.6f}\n")
-
-#             f.write("\ngraph:\n")
-#             coo = graph.tocoo()
-#             for a, b, w in zip(coo.row, coo.col, coo.data):
-#                 if a < b:  # write each edge once
-#                     f.write(f"{a}, {b}, {w:.6f}\n")
-#         print(f"✓ Saved {filename} (h = {h:.3f}, points = {len(points)})")
-#         count += 1
+                print(f"✓ Saved {filename} (h = {h:.3f}, points = {len(points)})")
 
 
 
+# def generate_dataset(save_dir):
+#     for radius, nsub in nsub_radius:
+#         for i in  range(100):
+#             graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
+#             source_idx = random.randint(0, len(points) - 1)
+#             distances = true_distances(points, radius, source_idx)
 
+#             filename = f"sphere_radius_{radius}_nsub_{nsub}_source_{source_idx}.txt"
+#             filepath = os.path.join(save_dir, filename)
 
+#             with open(filepath, "w") as f:
+#                 f.write(f"source_idx: {source_idx}\n")
+#                 f.write(f"h_value: {h:.6f}\n\n")
+
+#                 f.write("points:\n")
+#                 for p, d in zip(points, distances):
+#                     f.write(f"{p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f}, {d:.6f}\n")
+
+#                 f.write("\ngraph:\n")
+#                 coo = graph.tocoo()
+#                 for a, b, w in zip(coo.row, coo.col, coo.data):
+#                     if a < b:  # write each edge once
+#                         f.write(f"{a}, {b}, {w:.6f}\n")
+
+#             print(f"✓ Saved {filename} (h = {h:.3f}, points = {len(points)})")
+
+        
 def test_sphere_dataset(filepath, radius=10.0, tol=1e-2):
     with open(filepath, 'r') as f:
         lines = f.read().splitlines()
@@ -214,5 +195,5 @@ def test_all_generated_spheres(directory, radius=10.0, tol=0.001):
             test_sphere_dataset(filepath, radius, tol)
 
 if __name__ == "__main__":
-    generate_dataset(NUM_SPHERES, OUTPUT_DIR)
-    # test_all_generated_spheres(OUTPUT_DIR, radius=RADIUS, tol=0.001)
+    generate_dataset(OUTPUT_DIR)
+    #test_all_generated_spheres(OUTPUT_DIR, radius=RADIUS, tol=0.001)

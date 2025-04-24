@@ -46,16 +46,6 @@ def make_sphere(radius=1.0, nsub=3):
 
     return graph, faces, points, sphere, h
 
-def make_spheres_radiuses_set(nsub=4):   #to calculate desired h and get r,nsub
-    graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
-    radiuses = ((np.arange(1, 16) / 10) / h)  #here we change
-    nsub_radises = [(r, nsub) for r in radiuses] 
-
-    return nsub_radises
-
-make_spheres_radiuses_set(2)
-
-
 def plot_errors(h_values, errors_regular_FMM, errors_saar_model):
     plt.figure()
     plt.loglog(h_values, errors_regular_FMM, marker='o', label='Regular FMM')
@@ -230,6 +220,13 @@ def true_distances(points, radius, source_idx):
     dists[source_idx] = 0.0
     return dists
 
+def make_spheres_radiuses_set(nsub=4, start_h=0.1, end_h=1.6, step=0.1):   #to calculate desired h and get r,nsub
+    graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
+    radiuses = (np.arange(start_h, end_h, step) / h)  #here we change
+    nsub_radises = [(r, nsub) for r in radiuses] 
+
+    return nsub_radises
+
 nsub_radius = [(0.33518611916632424, 2),
  (0.6703722383326485, 2),
  (1.0055583574989726, 2),
@@ -246,6 +243,8 @@ nsub_radius = [(0.33518611916632424, 2),
  (4.692605668328539, 2),
  (5.027791787494864, 2)] #(radius, nsub)
 
+nsub_radius = make_spheres_radiuses_set(nsub=3, start_h=0.4, end_h=1.6, step=0.2) 
+
 h_vals = []
 l1_errors_regular_FMM = []
 l1_errors_saar_model = []
@@ -255,21 +254,20 @@ for n_r in nsub_radius:
     #points = coordinates of each point
     #graph = (number of node a, number of node b, edge length between a and b)
     graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-    source_idxs = [3] #indices of the source points
+    source_idxs = [3, 7, 21, 17, 4, 14, 5,  31, 37, 40, 22, 25] #indices of the source points - !kind of good!
     print(f"h: {h}")
 
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
-    checkpoint = torch.load("checkpoints/Good_sphere_pointNet_100spheres_100epochs.pt", map_location=device)
+    checkpoint = torch.load("checkpoints\sphere_pointnet_epoch3_loss3.3670685597769035e-05.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
     local_solver = local_solver.to(device)
     local_solver.eval()
-    global_local_solver = local_solver #make it global
+    global_local_solver = local_solver
 
     l1_losses_regular_FMM = []
     l1_losses_saar_model = []
     for source_idx in source_idxs:
-        # print(f"Source index: {source_idx}")
         distances_regular_FMM = FMM_with_local_solver(graph, points, [source_idx], local_solver_regular_FMM)
         distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
         true_geodesic = true_distances(points, radius, source_idx)
@@ -290,10 +288,10 @@ for n_r in nsub_radius:
 
 
 average_slope_regular_FMM = np.mean(np.diff(l1_errors_regular_FMM) / np.diff(h_vals))
-#average_slope_saar_model = np.mean(np.diff(l1_errors_saar_model) / np.diff(h_vals))
+average_slope_saar_model = np.mean(np.diff(l1_errors_saar_model) / np.diff(h_vals))
 print(f"h values: {h_vals}")
 print(f"Average slope: {average_slope_regular_FMM:.3f}")
-#print(f"Average slope: {average_slope_saar_model:.3f}")
+print(f"Average slope: {average_slope_saar_model:.3f}")
 plot_errors(h_vals, l1_errors_regular_FMM, l1_errors_saar_model)
 print(f"l1_errors_regular_FMM: {l1_errors_regular_FMM}")
 print(f"l1_errors_saar_model: {l1_errors_saar_model}")

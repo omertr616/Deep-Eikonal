@@ -24,11 +24,18 @@ loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 model = SpherePointNetRing(ring=ring, input_channels=4).to(device)
 # model = SpherePointNetRingCos(ring=ring, input_channels=94).to(device)
 
+# ----------Load Pretrained Model ----------
+checkpoint_path = "checkpoints/sphere_pointnet_epoch99_loss0.000000.pt"
+checkpoint = torch.load(checkpoint_path, map_location=device)
+model.load_state_dict(checkpoint["model_state_dict"])
+model.eval()
+
 # ---------- Loss and Optimizer ----------
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
 # ---------- Training Loop ----------
+best_loss = float("inf")
 for epoch in range(epochs):
     print(f"\nEpoch {epoch + 1}/{epochs}")
     model.train()
@@ -49,6 +56,8 @@ for epoch in range(epochs):
 
     avg_loss = total_loss / len(dataset)
     print(f"Epoch {epoch + 1}/{epochs} | Loss: {avg_loss:.6f}")
-    # ---------- Save ----------
-    os.makedirs("checkpoints", exist_ok=True)
-    torch.save({"model_state_dict": model.state_dict()}, f"checkpoints/sphere_pointnet_epoch{epoch}_loss{avg_loss}.pt")
+    # ---------- Save only if improved ----------
+    if avg_loss < best_loss:
+        best_loss = avg_loss
+        os.makedirs("checkpoints", exist_ok=True)
+        torch.save({"model_state_dict": model.state_dict()}, f"checkpoints/sphere_pointnet_epoch{epoch}_loss{avg_loss}.pt")
