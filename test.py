@@ -39,10 +39,6 @@ def make_sphere(radius=1.0, nsub=3):
 
     graph = csr_matrix((dists, (rows, cols)), shape=(n_points, n_points))
     h = np.mean(edge_lengths)
-    
-    # for i in range(10):  # Check the first 10 points
-    #     neighbors = graph[i].nonzero()[1]
-    #     print(f"Point {i}: {len(neighbors)} neighbors -> {neighbors}")
 
     return graph, faces, points, sphere, h
 
@@ -78,19 +74,14 @@ def get_3_ring_visited_neighbors(p, graph, status, u, points):
     return torch.tensor(visited, dtype=torch.float32).T  # Shape: [4, N]
 
 
-
-
 def local_solver_regular_FMM(p, graph, status, u, points):
     min_val = np.inf
     for neighbor in graph[p].nonzero()[1]:
         if status[neighbor] == 'Visited':
-            edge_weight = graph[p, neighbor]
-            candidate = u[neighbor] + edge_weight
+            candidate = u[neighbor] + graph[p, neighbor]
             if candidate < min_val:
                 min_val = candidate
     return min_val
-
-
 
 
 def local_solver_model_ring3(p, graph, status, u, points): #fast
@@ -101,8 +92,6 @@ def local_solver_model_ring3(p, graph, status, u, points): #fast
     mask[:num_valid] = 1
     mask = mask.unsqueeze(0)  # (1, 90)
     point_xyz = torch.tensor(points[p], dtype=torch.float32).unsqueeze(0)  # (1, 3)
-    
-    # Move to GPU if available
     visited_neighbors_padded = visited_neighbors_padded.to(device)
     point_xyz = point_xyz.to(device)
     mask = mask.to(device)
@@ -111,7 +100,42 @@ def local_solver_model_ring3(p, graph, status, u, points): #fast
     return distance_estimation
 
 
-def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver):
+# def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver): NOT REAL!
+#     n_points = graph.shape[0]
+#     u = np.full(n_points, np.inf)
+#     status = np.full(n_points, 'Unvisited', dtype=object)
+#     heap = []  # (u value, point index)
+
+#     for p in source_points:
+#         u[p] = 0
+#         status[p] = 'Visited'
+#         for neighbor in graph[p].nonzero()[1]:
+#             if status[neighbor] == 'Unvisited':
+#                 status[neighbor] = 'Wavefront'
+#                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
+
+#     while heap:
+#         _, p = heapq.heappop(heap)
+#         if status[p] == 'Visited':
+#             continue 
+
+#         u[p] = local_solver(p, graph, status, u, points)
+#         status[p] = 'Visited'
+
+#         for neighbor in graph[p].nonzero()[1]:
+#             if status[neighbor] == 'Unvisited' or status[neighbor] == 'Wavefront': #Omer added
+#                 if status[neighbor] == 'Unvisited':
+#                     status[neighbor] = 'Wavefront'
+#                     u[neighbor] = u[p] + graph[p, neighbor]
+#                 else:
+#                     new_distance = u[p] + graph[p, neighbor]
+#                     if new_distance < u[neighbor]:
+#                         u[neighbor] = new_distance
+#                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
+#     return u
+
+
+def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver):  #test for implementation of the "real" FMM
     n_points = graph.shape[0]
     u = np.full(n_points, np.inf)
     status = np.full(n_points, 'Unvisited', dtype=object)
@@ -128,87 +152,22 @@ def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver
     while heap:
         _, p = heapq.heappop(heap)
         if status[p] == 'Visited':
-            continue 
+            continue
 
         u[p] = local_solver(p, graph, status, u, points)
         status[p] = 'Visited'
 
         for neighbor in graph[p].nonzero()[1]:
-            if status[neighbor] == 'Unvisited' or status[neighbor] == 'Wavefront': #Omer added
-                if status[neighbor] == 'Unvisited':
-                    status[neighbor] = 'Wavefront'
-                    u[neighbor] = u[p] + graph[p, neighbor]
-                else:
-                    new_distance = u[p] + graph[p, neighbor]
-                    if new_distance < u[neighbor]:
-                        u[neighbor] = new_distance
+            if status[neighbor] == 'Unvisited':
+                status[neighbor] = 'Wavefront'
+                u[neighbor] = local_solver(neighbor, graph, status, u, points)
                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
+            elif status[neighbor] == 'Wavefront':
+                new_distance = local_solver(neighbor, graph, status, u, points)
+                if new_distance < u[neighbor]:
+                    u[neighbor] = new_distance
+                    heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
     return u
-
-
-# def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver): #real
-#     n_points = graph.shape[0]
-#     u = np.full(n_points, np.inf)
-#     status = np.full(n_points, 'Unvisited', dtype=object)
-#     wavefront_heap = []  # Min-heap of (distance, node)
-#     wavefront_set = set()  # To avoid duplicates in heap
-
-#     for p in source_points:
-#         u[p] = 0
-#         status[p] = 'Visited'
-#         for neighbor in graph[p].indices:
-#             if status[neighbor] == 'Unvisited':
-#                 status[neighbor] = 'Wavefront'
-#                 heapq.heappush(wavefront_heap, (np.inf, neighbor))
-#                 wavefront_set.add(neighbor)
-
-#     while wavefront_heap:
-#         updated_heap = []
-#         for i in range(len(wavefront_heap)):
-#             _, node = heapq.heappop(wavefront_heap)
-#             dist = local_solver(node, graph, status, u, points)
-#             heapq.heappush(updated_heap, (dist, node))
-
-#         wavefront_heap = updated_heap
-#         heapq.heapify(wavefront_heap)
-#         if not wavefront_heap:
-#             break
-
-#         minimal_distance, minimal_node = heapq.heappop(wavefront_heap)
-#         u[minimal_node] = minimal_distance
-#         status[minimal_node] = 'Visited'
-#         wavefront_set.discard(minimal_node)
-
-#         for neighbor in graph[minimal_node].indices:
-#             if status[neighbor] == 'Unvisited':
-#                 status[neighbor] = 'Wavefront'
-#                 if neighbor not in wavefront_set:
-#                     heapq.heappush(wavefront_heap, (np.inf, neighbor))
-#                     wavefront_set.add(neighbor)
-
-#     return u
-
-
-
-# def true_distances(points, radius, source_idx):
-#     source = points[source_idx]
-#     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
-#     norm_source = source / np.linalg.norm(source)
-#     cosines = norm_points @ norm_source
-#     cosines = np.clip(cosines, -1.0, 1.0)
-#     true_distances = radius * np.arccos(cosines)
-#     return true_distances
-
-# def true_distances(points, radius, source_idx):
-#     points = points.astype(np.float64)
-#     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
-#     norm_source = norm_points[source_idx]
-#     cosines = np.sum(norm_points * norm_source, axis=1)
-#     cosines = np.clip(cosines, -1.0, 1.0)
-#     true_distances = radius * np.arccos(cosines)
-#     true_distances[source_idx] = 0.0
-
-#     return true_distances
 
 def true_distances(points, radius, source_idx):
     points = points.astype(np.float64)
@@ -227,39 +186,24 @@ def make_spheres_radiuses_set(nsub=4, start_h=0.1, end_h=1.6, step=0.1):   #to c
 
     return nsub_radises
 
-nsub_radius = [(0.33518611916632424, 2),
- (0.6703722383326485, 2),
- (1.0055583574989726, 2),
- (1.340744476665297, 2),
- (1.675930595831621, 2),
- (2.011116714997945, 2),
- (2.3463028341642693, 2),
- (2.681488953330594, 2),
- (3.016675072496918, 2),
- (3.351861191663242, 2),
- (3.6870473108295667, 2),
- (4.02223342999589, 2),
- (4.357419549162215, 2),
- (4.692605668328539, 2),
- (5.027791787494864, 2)] #(radius, nsub)
-
-nsub_radius = make_spheres_radiuses_set(nsub=3, start_h=0.4, end_h=1.6, step=0.2) 
+nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.1, end_h=1, step=0.1) 
 
 h_vals = []
 l1_errors_regular_FMM = []
 l1_errors_saar_model = []
+np.random.seed(0)
 for n_r in nsub_radius:
     radius = n_r[0]
     nsub = n_r[1]
     #points = coordinates of each point
     #graph = (number of node a, number of node b, edge length between a and b)
     graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-    source_idxs = [3, 7, 21, 17, 4, 14, 5,  31, 37, 40, 22, 25] #indices of the source points - !kind of good!
+    source_idxs = np.random.choice(len(points), size=8, replace=False) #randomly select points from the sphere
     print(f"h: {h}")
 
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
-    checkpoint = torch.load("checkpoints\sphere_pointnet_epoch3_loss3.3670685597769035e-05.pt", map_location=device)
+    checkpoint = torch.load("checkpoints\sphere_pointnet_epoch10_loss2.4927799524200985e-06.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
     local_solver = local_solver.to(device)
     local_solver.eval()
@@ -287,11 +231,12 @@ for n_r in nsub_radius:
     h_vals.append(h)
 
 
-average_slope_regular_FMM = np.mean(np.diff(l1_errors_regular_FMM) / np.diff(h_vals))
-average_slope_saar_model = np.mean(np.diff(l1_errors_saar_model) / np.diff(h_vals))
+
+average_slope_regular_FMM = np.mean(np.diff(np.log(l1_errors_regular_FMM)) / np.diff(np.log(h_vals)))
+average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
 print(f"h values: {h_vals}")
-print(f"Average slope: {average_slope_regular_FMM:.3f}")
-print(f"Average slope: {average_slope_saar_model:.3f}")
+print(f"Average slope regular FMM: {average_slope_regular_FMM:.3f}")
+print(f"Average slope saar model: {average_slope_saar_model:.3f}")
 plot_errors(h_vals, l1_errors_regular_FMM, l1_errors_saar_model)
 print(f"l1_errors_regular_FMM: {l1_errors_regular_FMM}")
 print(f"l1_errors_saar_model: {l1_errors_saar_model}")
