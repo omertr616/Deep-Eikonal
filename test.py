@@ -201,7 +201,7 @@ for n_r in nsub_radius:
     source_idxs = np.random.choice(len(points), size=8, replace=False) #randomly select points from the sphere
     print(f"h: {h}")
 
-    #Load the local solver (the model)
+    #Load the local solver (the model) 
     local_solver = SpherePointNetRing()
     checkpoint = torch.load("checkpoints\sphere_pointnet_epoch10_loss2.4927799524200985e-06.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
