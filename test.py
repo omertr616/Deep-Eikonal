@@ -190,7 +190,7 @@ nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.1, end_h=1, step=0.1)
 
 h_vals = []
 l1_errors_regular_FMM = []
-l1_errors_saar_model = []
+l1_errors_saar_model = []#
 np.random.seed(0)
 for n_r in nsub_radius:
     radius = n_r[0]
