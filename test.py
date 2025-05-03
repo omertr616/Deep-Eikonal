@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from scipy.sparse import csr_matrix
-from models.sphere_models import SpherePointNetRing
+from models.sphere_models import SpherePointNetRing, SpherePointNetRingFeatureExtractionFirstRing
 
 global_local_solver = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -74,7 +74,7 @@ def get_3_ring_visited_neighbors(p, graph, status, u, points):
     return torch.tensor(visited, dtype=torch.float32).T  # Shape: [4, N]
 
 
-def local_solver_regular_FMM(p, graph, status, u, points):
+def local_solver_dijkstra(p, graph, status, u, points):
     min_val = np.inf
     for neighbor in graph[p].nonzero()[1]:
         if status[neighbor] == 'Visited':
@@ -82,6 +82,36 @@ def local_solver_regular_FMM(p, graph, status, u, points):
             if candidate < min_val:
                 min_val = candidate
     return min_val
+
+
+def local_solver_ron(p, graph, status, u, points):
+    neighbors = graph[p].nonzero()[1]
+    visited_neighbors = [n for n in neighbors if status[n] == 'Visited']
+
+    if not visited_neighbors:
+        return u[p] 
+
+    min_u = min(u[n] + np.linalg.norm(points[p] - points[n]) for n in visited_neighbors)
+
+    best_u = min_u
+    for i in range(len(visited_neighbors)):
+        for j in range(i + 1, len(visited_neighbors)):
+            a, b = visited_neighbors[i], visited_neighbors[j]
+            ua, ub = u[a], u[b]
+            pa, pb, pp = points[a], points[b], points[p]
+            dab = np.linalg.norm(pa - pb)
+
+            # Upwind Eikonal solver
+            if abs(ua - ub) >= dab:
+                continue  # upwind condition not met, use min
+
+            s = (ua + ub + np.sqrt(2 * dab**2 - (ua - ub)**2)) / 2
+            if s < best_u:
+                best_u = s
+
+    return best_u
+
+
 
 
 def local_solver_model_ring3(p, graph, status, u, points): #fast
@@ -135,7 +165,7 @@ def local_solver_model_ring3(p, graph, status, u, points): #fast
 #     return u
 
 
-def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver):  #test for implementation of the "real" FMM
+def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver):  #Implementation of the "real" FMM
     n_points = graph.shape[0]
     u = np.full(n_points, np.inf)
     status = np.full(n_points, 'Unvisited', dtype=object)
@@ -169,6 +199,12 @@ def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver
                     heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
     return u
 
+def make_spheres_radiuses_set(nsub=3, start_h=0.1, end_h=1.6, step=0.1):   #to calculate desired h and get r,nsub
+    graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
+    radiuses = (np.arange(start_h, end_h, step) / h)  #here we change
+    nsub_radises = [(r, nsub) for r in radiuses] 
+    return nsub_radises
+
 def true_distances(points, radius, source_idx):
     points = points.astype(np.float64)
     norm_points = points / np.linalg.norm(points, axis=1, keepdims=True)
@@ -179,17 +215,10 @@ def true_distances(points, radius, source_idx):
     dists[source_idx] = 0.0
     return dists
 
-def make_spheres_radiuses_set(nsub=4, start_h=0.1, end_h=1.6, step=0.1):   #to calculate desired h and get r,nsub
-    graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
-    radiuses = (np.arange(start_h, end_h, step) / h)  #here we change
-    nsub_radises = [(r, nsub) for r in radiuses] 
 
-    return nsub_radises
-
-nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.1, end_h=1, step=0.1) 
-
+nsub_radius = make_spheres_radiuses_set(nsub=3, start_h=0.2, end_h=1.2, step=0.4) 
 h_vals = []
-l1_errors_regular_FMM = []
+l1_errors_base = []
 l1_errors_saar_model = []#
 np.random.seed(0)
 for n_r in nsub_radius:
@@ -198,24 +227,25 @@ for n_r in nsub_radius:
     #points = coordinates of each point
     #graph = (number of node a, number of node b, edge length between a and b)
     graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-    source_idxs = np.random.choice(len(points), size=8, replace=False) #randomly select points from the sphere
+    source_idxs = np.random.choice(len(points), size=5, replace=False) #randomly select points from the sphere
     print(f"h: {h}")
 
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
-    checkpoint = torch.load("checkpoints\sphere_pointnet_epoch10_loss2.4927799524200985e-06.pt", map_location=device)
+    local_solver = SpherePointNetRingFeatureExtractionFirstRing()
+    checkpoint = torch.load("checkpoints\sphere_pointnet_epoch3_loss2.7208573660469047e-05.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
     local_solver = local_solver.to(device)
     local_solver.eval()
     global_local_solver = local_solver
 
-    l1_losses_regular_FMM = []
+    l1_losses_base = []
     l1_losses_saar_model = []
     for source_idx in source_idxs:
-        distances_regular_FMM = FMM_with_local_solver(graph, points, [source_idx], local_solver_regular_FMM)
+        distances_base = FMM_with_local_solver(graph, points, [source_idx], local_solver_ron)
         distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
         true_geodesic = true_distances(points, radius, source_idx)
-        l1_losses_regular_FMM.append(np.mean(np.abs(distances_regular_FMM - true_geodesic)))
+        l1_losses_base.append(np.mean(np.abs(distances_base - true_geodesic)))
         l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
         #sphere["GeodesicDistance"] = true_geodesic
         #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
@@ -224,19 +254,18 @@ for n_r in nsub_radius:
         #sphere["GeodesicDistance"] = distances_saar_model
         #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
 
-    l1_loss_regular_FMM = np.mean(l1_losses_regular_FMM)
+    l1_loss_regular_FMM = np.mean(l1_losses_base)
     l1_loss_saar_model = np.mean(l1_losses_saar_model)
-    l1_errors_regular_FMM.append(l1_loss_regular_FMM)
+    l1_errors_base.append(l1_loss_regular_FMM)
     l1_errors_saar_model.append(l1_loss_saar_model)
     h_vals.append(h)
 
 
-
-average_slope_regular_FMM = np.mean(np.diff(np.log(l1_errors_regular_FMM)) / np.diff(np.log(h_vals)))
+average_slope_regular_FMM = np.mean(np.diff(np.log(l1_errors_base)) / np.diff(np.log(h_vals)))
 average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
 print(f"h values: {h_vals}")
-print(f"Average slope regular FMM: {average_slope_regular_FMM:.3f}")
+print(f"Average slope base: {average_slope_regular_FMM:.3f}")
 print(f"Average slope saar model: {average_slope_saar_model:.3f}")
-plot_errors(h_vals, l1_errors_regular_FMM, l1_errors_saar_model)
-print(f"l1_errors_regular_FMM: {l1_errors_regular_FMM}")
+plot_errors(h_vals, l1_errors_base, l1_errors_saar_model)
+print(f"l1_errors_base: {l1_errors_base}")
 print(f"l1_errors_saar_model: {l1_errors_saar_model}")

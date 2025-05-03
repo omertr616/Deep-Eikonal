@@ -3,18 +3,19 @@ from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from models.sphere_models import SpherePointNetRing, SpherePointNetRingCos
+from models.sphere_models import *
 from sphere_data_loader import SphereDataset 
 from utils.utils import ring_size_mapping_sphere
 import os
 
 # ---------- Config ----------
-data_path = "generated_spheres/train_spheres"
+data_path = "generated_spheres/train_spheres/"
 ring = 3
 epochs = 100
 batch_size = 16
 lr = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+load_checkpoint = False
 
 # ---------- Dataset ----------
 dataset = SphereDataset(data_path, ring_size=ring, precompute_neighbors=True)
@@ -22,16 +23,19 @@ loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # ---------- Model ----------
 model = SpherePointNetRing(ring=ring, input_channels=4).to(device)
+model = SpherePointNetRingFeatureExtractionFirstRing(ring=ring, input_channels=4).to(device)
+model = SpherePointNetRingAttention(ring=ring, input_channels=4).to(device)
 # model = SpherePointNetRingCos(ring=ring, input_channels=94).to(device)
 
 # ----------Load Pretrained Model ----------
-checkpoint_path = "checkpoints/sphere_pointnet_epoch99_loss0.000000.pt"
-checkpoint = torch.load(checkpoint_path, map_location=device)
-model.load_state_dict(checkpoint["model_state_dict"])
-model.eval()
-
+if load_checkpoint:
+    checkpoint_path = "checkpoints/sphere_pointnet_epoch99_loss0.000000.pt"
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
 # ---------- Loss and Optimizer ----------
 criterion = nn.MSELoss()
+criterion = nn.SmoothL1Loss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
 # ---------- Training Loop ----------
