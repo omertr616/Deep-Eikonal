@@ -95,6 +95,7 @@ class SphereDataset(Dataset):
         mask = np.zeros(self.max_neighbors, dtype=np.float32)
         valid_len = len(data)
         mask[:valid_len] = 1
+        mask = torch.from_numpy(mask).float()  # (90)
 
         if len(data) < self.max_neighbors:
             pad = np.zeros((self.max_neighbors - len(data), 4), dtype=np.float32)
@@ -104,6 +105,15 @@ class SphereDataset(Dataset):
 
         x = torch.from_numpy(data).float().transpose(0, 1)             # (4, 90)
         point_xyz = torch.from_numpy(points[p]).float()               # (3)
+
+        #add extra stuff for the network
+        neighbors_1ring_cords = []
+        # for neighbor in neighbors:
+        #     n1_ring = self.get_1ring_neighbors(neighbor, graph)
+        #     n1_ring_cords = points[n1_ring]
+        #     neighbors_1ring_cords.append(n1_ring_cords)
+        
+        #---------------------------------
         point_gt = torch.tensor([gt[p]], dtype=torch.float32)         # (1)
 
         return x, point_xyz, point_gt, mask
@@ -126,8 +136,7 @@ class SphereDataset(Dataset):
                     queue.append((neighbor, depth + 1))
         return neighbors
     
-    def get_1ring_neighbors(self, p, graph, gt, target_gt):
-        visited = set()
+    def get_1ring_neighbors(self, p, graph):
         seen = set([p])
         queue = deque([(p, 0)])
         neighbors = []
@@ -136,12 +145,13 @@ class SphereDataset(Dataset):
             current, depth = queue.popleft()
             if depth > 1:
                 continue
-            if current != p and gt[current] < target_gt:
+            if current != p:
                 neighbors.append(current)
             for neighbor in graph[current].nonzero()[1]:
                 if neighbor not in seen:
                     seen.add(neighbor)
                     queue.append((neighbor, depth + 1))
+        
         return neighbors
 
     def __repr__(self):

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from scipy.sparse import csr_matrix
-from models.sphere_models import SpherePointNetRing, SpherePointNetRingFeatureExtractionFirstRing
+from models.sphere_models import SpherePointNetRing, SpherePointNetRingFeatureExtractionFirstRing, SpherePointNetRingAttention, SpherePointNetRingAttentionAndConvolution
 
 global_local_solver = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -112,8 +112,6 @@ def local_solver_ron(p, graph, status, u, points):
     return best_u
 
 
-
-
 def local_solver_model_ring3(p, graph, status, u, points): #fast
     visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points).to(device)  # shape: (4, N) with N ≤ 90
     num_valid = visited_neighbors.shape[1]
@@ -216,7 +214,7 @@ def true_distances(points, radius, source_idx):
     return dists
 
 
-nsub_radius = make_spheres_radiuses_set(nsub=3, start_h=0.2, end_h=1.2, step=0.4) 
+nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.2, end_h=1.2, step=0.4) 
 h_vals = []
 l1_errors_base = []
 l1_errors_saar_model = []#
@@ -233,7 +231,9 @@ for n_r in nsub_radius:
     #Load the local solver (the model)
     local_solver = SpherePointNetRing()
     local_solver = SpherePointNetRingFeatureExtractionFirstRing()
-    checkpoint = torch.load("checkpoints\sphere_pointnet_epoch3_loss2.7208573660469047e-05.pt", map_location=device)
+    local_solver = SpherePointNetRingAttention()
+    local_solver = SpherePointNetRingAttentionAndConvolution()
+    checkpoint = torch.load("Deep-Eikonal\checkpoints\sphere_pointnet_epoch9_loss6.9316201177493276e-06.pt", map_location=device)
     local_solver.load_state_dict(checkpoint["model_state_dict"])
     local_solver = local_solver.to(device)
     local_solver.eval()
@@ -242,7 +242,7 @@ for n_r in nsub_radius:
     l1_losses_base = []
     l1_losses_saar_model = []
     for source_idx in source_idxs:
-        distances_base = FMM_with_local_solver(graph, points, [source_idx], local_solver_ron)
+        distances_base = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
         distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
         true_geodesic = true_distances(points, radius, source_idx)
         l1_losses_base.append(np.mean(np.abs(distances_base - true_geodesic)))
