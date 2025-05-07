@@ -8,7 +8,7 @@ import os
 import random
 
 # ---------- Config ----------
-OUTPUT_DIR = "generated_spheres/train_spheres"
+OUTPUT_DIR = "Deep-Eikonal/generated_spheres/train_spheres"
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
