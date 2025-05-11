@@ -1,0 +1,7 @@
+generated_spheres/
+generated_surfaces/
+checkpoints/
+mixed_data/
+__pycache__/
+*.pyc
+*.pyo

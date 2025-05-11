@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -fopenmp -Wall -Wno-unused-result -O3 -fPIC -flto -shared  -o /home/omer.trinin/Deep-Eikonal/fast_matching_python/fast_marching/fast_marching.cpython-38-x86_64-linux-gnu.so CMakeFiles/fast_marching.dir/fm_module.cpp.o  /home/omer.trinin/Deep-Eikonal/fast_matching_python/fast_marching/libfast_marching_lib.a 
