@@ -35,8 +35,9 @@ class SphereDataset(Dataset):
                 x, y, z, d = map(float, line.split(","))
                 points.append([x, y, z])
                 gt.append(d)
-            points = np.array(points, dtype=np.float32)
-            gt = np.array(gt, dtype=np.float32)
+            points = np.array(points, dtype=np.float64)
+            gt = np.array(gt, dtype=np.float64)
+
 
             graph_lines = lines[graph_idx + 1:]
             rows, cols, dists = [], [], []
@@ -92,19 +93,19 @@ class SphereDataset(Dataset):
 
         #compute mask and padding if needed
 
-        mask = np.zeros(self.max_neighbors, dtype=np.float32)
+        mask = np.zeros(self.max_neighbors, dtype=np.float64)
         valid_len = len(data)
         mask[:valid_len] = 1
-        mask = torch.from_numpy(mask).float()  # (90)
+        mask = torch.from_numpy(mask).double()  # (90)
 
         if len(data) < self.max_neighbors:
-            pad = np.zeros((self.max_neighbors - len(data), 4), dtype=np.float32)
+            pad = np.zeros((self.max_neighbors - len(data), 4), dtype=np.float64)
             data = np.vstack([data, pad])
         else:
             data = data[:self.max_neighbors]
 
-        x = torch.from_numpy(data).float().transpose(0, 1)             # (4, 90)
-        point_xyz = torch.from_numpy(points[p]).float()               # (3)
+        x = torch.from_numpy(data).double().transpose(0, 1)             # (4, 90)
+        point_xyz = torch.from_numpy(points[p]).double()               # (3)
 
         #add extra stuff for the network
         neighbors_1ring_cords = []
@@ -114,7 +115,7 @@ class SphereDataset(Dataset):
         #     neighbors_1ring_cords.append(n1_ring_cords)
         
         #---------------------------------
-        point_gt = torch.tensor([gt[p]], dtype=torch.float32)         # (1)
+        point_gt = torch.tensor([gt[p]], dtype=torch.float64)         # (1)
 
         return x, point_xyz, point_gt, mask
 

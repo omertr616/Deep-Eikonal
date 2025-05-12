@@ -7,7 +7,7 @@ from models.sphere_models import *
 from sphere_data_loader import SphereDataset 
 from utils.utils import ring_size_mapping_sphere
 import os
-
+torch.set_default_dtype(torch.float64)
 
 # ---------- Config ----------
 data_path = "generated_spheres/train_spheres/"
@@ -23,10 +23,10 @@ dataset = SphereDataset(data_path, ring_size=ring, precompute_neighbors=True)
 loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # ---------- Model ----------
-model = SpherePointNetRing(ring=ring, input_channels=4).to(device)
-model = SpherePointNetRingFeatureExtractionFirstRing(ring=ring, input_channels=4).to(device)
-model = SpherePointNetRingAttention(ring=ring, input_channels=4).to(device)
-model = SpherePointNetRingAttentionAndConvolution(ring=ring, input_channels=4).to(device) 
+model = SpherePointNetRing(ring=ring, input_channels=4).to(device).double()
+model = SpherePointNetRingFeatureExtractionFirstRing(ring=ring, input_channels=4).to(device).double()
+model = SpherePointNetRingAttention(ring=ring, input_channels=4).to(device).double()
+model = SpherePointNetRingAttentionAndConvolution(ring=ring, input_channels=4).to(device).double()
 
 # ----------Load Pretrained Model ----------
 if load_checkpoint:  
@@ -47,9 +47,9 @@ for epoch in range(epochs):
     total_loss = 0.0
     pbar = tqdm(loader, desc="Training", leave=False)
     for x, point_xyz, point_gt, mask in pbar:
-        x = x.to(device) # [B, 4, 90]
-        point_xyz = point_xyz.to(device) # [B, 3]
-        point_gt = point_gt.to(device) # [B, 1]
+        x = x.to(device).double() # [B, 4, 90]
+        point_xyz = point_xyz.to(device).double() # [B, 3]
+        point_gt = point_gt.to(device).double() # [B, 1]
 
         optimizer.zero_grad()
         output = model(x, point_xyz, mask)

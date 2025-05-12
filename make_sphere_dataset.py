@@ -8,7 +8,7 @@ import os
 import random
 
 # ---------- Config ----------
-OUTPUT_DIR = "Deep-Eikonal/generated_spheres/train_spheres"
+OUTPUT_DIR = "DeepEikonal/generated_spheres/train_spheres"
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -75,47 +75,20 @@ def generate_dataset(save_dir):
 
                 with open(filepath, "w") as f:
                     f.write(f"source_idx: {source_idx}\n")
-                    f.write(f"h_value: {h:.6f}\n\n")
+                    f.write(f"h_value: {h:.17f}\n\n")
 
                     f.write("points:\n")
                     for p, d in zip(points, distances):
-                        f.write(f"{p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f}, {d:.6f}\n")
+                        f.write(f"{p[0]:.17f}, {p[1]:.17f}, {p[2]:.17f}, {d:.17f}\n")
 
                     f.write("\ngraph:\n")
                     coo = graph.tocoo()
                     for a, b, w in zip(coo.row, coo.col, coo.data):
                         if a < b:  # write each edge once
-                            f.write(f"{a}, {b}, {w:.6f}\n")
+                            f.write(f"{a}, {b}, {w:.17f}\n")
 
-                print(f"✓ Saved {filename} (h = {h:.3f}, points = {len(points)})")
+                print(f"✓ Saved {filename} (h = {h:.17f}, points = {len(points)})")
 
-
-
-# def generate_dataset(save_dir):
-#     for radius, nsub in nsub_radius:
-#         for i in  range(100):
-#             graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
-#             source_idx = random.randint(0, len(points) - 1)
-#             distances = true_distances(points, radius, source_idx)
-
-#             filename = f"sphere_radius_{radius}_nsub_{nsub}_source_{source_idx}.txt"
-#             filepath = os.path.join(save_dir, filename)
-
-#             with open(filepath, "w") as f:
-#                 f.write(f"source_idx: {source_idx}\n")
-#                 f.write(f"h_value: {h:.6f}\n\n")
-
-#                 f.write("points:\n")
-#                 for p, d in zip(points, distances):
-#                     f.write(f"{p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f}, {d:.6f}\n")
-
-#                 f.write("\ngraph:\n")
-#                 coo = graph.tocoo()
-#                 for a, b, w in zip(coo.row, coo.col, coo.data):
-#                     if a < b:  # write each edge once
-#                         f.write(f"{a}, {b}, {w:.6f}\n")
-
-#             print(f"✓ Saved {filename} (h = {h:.3f}, points = {len(points)})")
 
         
 def test_sphere_dataset(filepath, radius=10.0, tol=1e-2):
