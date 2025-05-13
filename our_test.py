@@ -1,3 +1,4 @@
+import os
 import torch
 import heapq
 import pyvista as pv
@@ -7,11 +8,25 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from scipy.sparse import csr_matrix
+from fast_matching_python.fast_marching import fast_marching
 from models.sphere_models import SpherePointNetRing, SpherePointNetRingFeatureExtractionFirstRing, SpherePointNetRingAttention, SpherePointNetRingAttentionAndConvolution
+import sys
+sys.path.append("/home/kizner.gil/ron/project_ron_conv_attention0405/Deep-Eikonal")
 
 global_local_solver = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+def fmm(V: np.ndarray, F: np.ndarray, source_index=0) -> np.ndarray:
+    tmp_off = "/tmp/mesh.off"
+    with open(tmp_off, "w") as f:
+        f.write("OFF\n")
+        f.write(f"{len(V)} {len(F)} 0\n")
+        for vert in V:
+            f.write(f"{vert[0]} {vert[1]} {vert[2]}\n")
+        for face in F:
+            f.write(f"3 {face[0]} {face[1]} {face[2]}\n")
+    D = fast_marching.fast_marching(data_dir=tmp_off, source_index=source_index, verbose=True)  # if 'source' is the correct argument name
+    return np.asarray(D)
 
 def make_sphere(radius=1.0, nsub=3):
     # sphere = pv.Sphere(radius=radius, theta_resolution=theta_resolution//2, phi_resolution=phi_resolution)
@@ -42,19 +57,25 @@ def make_sphere(radius=1.0, nsub=3):
 
     return graph, faces, points, sphere, h
 
-def plot_errors(h_values, errors_regular_FMM, errors_saar_model):
+
+def plot_errors(h_values, *error_series, labels=None, save_path="plots/convergence_plot.png"):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     plt.figure()
-    plt.loglog(h_values, errors_regular_FMM, marker='o', label='Regular FMM')
-    plt.loglog(h_values, errors_saar_model, marker='s', label='Saar Model')
+    for i, errors in enumerate(error_series):
+        label = labels[i] if labels and i < len(labels) else f"Series {i+1}"
+        plt.loglog(h_values, errors, marker='o', label=label)
+
     plt.xlabel('Mean edge length h')
     plt.ylabel('L1 Loss')
     plt.title('Convergence Plot (Log-Log)')
     plt.grid(True, which='both')
     plt.legend()
-    plt.show()
+    plt.savefig(save_path, dpi=300)
+    print(f"✅ Plot saved to: {save_path}")
 
 
-def get_3_ring_visited_neighbors(p, graph, status, u, points):
+
+def get_3_ring_visited_neighbors(p, graph, status, u, points, local_solver_model):
     visited = []
     queue = deque([(p, 0)])  # (node, depth)
     seen = set([p])
@@ -74,7 +95,7 @@ def get_3_ring_visited_neighbors(p, graph, status, u, points):
     return torch.tensor(visited, dtype=torch.float32).T  # Shape: [4, N]
 
 
-def local_solver_dijkstra(p, graph, status, u, points):
+def local_solver_dijkstra(p, graph, status, u, points, local_solver_model):
     min_val = np.inf
     for neighbor in graph[p].nonzero()[1]:
         if status[neighbor] == 'Visited':
@@ -84,36 +105,8 @@ def local_solver_dijkstra(p, graph, status, u, points):
     return min_val
 
 
-def local_solver_ron(p, graph, status, u, points):
-    neighbors = graph[p].nonzero()[1]
-    visited_neighbors = [n for n in neighbors if status[n] == 'Visited']
-
-    if not visited_neighbors:
-        return u[p] 
-
-    min_u = min(u[n] + np.linalg.norm(points[p] - points[n]) for n in visited_neighbors)
-
-    best_u = min_u
-    for i in range(len(visited_neighbors)):
-        for j in range(i + 1, len(visited_neighbors)):
-            a, b = visited_neighbors[i], visited_neighbors[j]
-            ua, ub = u[a], u[b]
-            pa, pb, pp = points[a], points[b], points[p]
-            dab = np.linalg.norm(pa - pb)
-
-            # Upwind Eikonal solver
-            if abs(ua - ub) >= dab:
-                continue  # upwind condition not met, use min
-
-            s = (ua + ub + np.sqrt(2 * dab**2 - (ua - ub)**2)) / 2
-            if s < best_u:
-                best_u = s
-
-    return best_u
-
-
-def local_solver_model_ring3(p, graph, status, u, points): #fast
-    visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points).to(device)  # shape: (4, N) with N ≤ 90
+def local_solver_model_ring3(p, graph, status, u, points, local_solver_model): #fast
+    visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points, local_solver_model).to(device)  # shape: (4, N) with N ≤ 90
     num_valid = visited_neighbors.shape[1]
     visited_neighbors_padded = F.pad(visited_neighbors, (0, 90 - num_valid), "constant", 0).unsqueeze(0)  # (1, 4, 90)
     mask = torch.zeros(90, dtype=torch.float32)
@@ -124,46 +117,11 @@ def local_solver_model_ring3(p, graph, status, u, points): #fast
     point_xyz = point_xyz.to(device)
     mask = mask.to(device)
     
-    distance_estimation = global_local_solver(visited_neighbors_padded, point_xyz, mask).item()
+    distance_estimation = local_solver_model(visited_neighbors_padded, point_xyz, mask).item()
     return distance_estimation
 
 
-# def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver): NOT REAL!
-#     n_points = graph.shape[0]
-#     u = np.full(n_points, np.inf)
-#     status = np.full(n_points, 'Unvisited', dtype=object)
-#     heap = []  # (u value, point index)
-
-#     for p in source_points:
-#         u[p] = 0
-#         status[p] = 'Visited'
-#         for neighbor in graph[p].nonzero()[1]:
-#             if status[neighbor] == 'Unvisited':
-#                 status[neighbor] = 'Wavefront'
-#                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
-
-#     while heap:
-#         _, p = heapq.heappop(heap)
-#         if status[p] == 'Visited':
-#             continue 
-
-#         u[p] = local_solver(p, graph, status, u, points)
-#         status[p] = 'Visited'
-
-#         for neighbor in graph[p].nonzero()[1]:
-#             if status[neighbor] == 'Unvisited' or status[neighbor] == 'Wavefront': #Omer added
-#                 if status[neighbor] == 'Unvisited':
-#                     status[neighbor] = 'Wavefront'
-#                     u[neighbor] = u[p] + graph[p, neighbor]
-#                 else:
-#                     new_distance = u[p] + graph[p, neighbor]
-#                     if new_distance < u[neighbor]:
-#                         u[neighbor] = new_distance
-#                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
-#     return u
-
-
-def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver):  #Implementation of the "real" FMM
+def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver, local_solver_model=None):  #Implementation of the "real" FMM
     n_points = graph.shape[0]
     u = np.full(n_points, np.inf)
     status = np.full(n_points, 'Unvisited', dtype=object)
@@ -182,16 +140,16 @@ def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver
         if status[p] == 'Visited':
             continue
 
-        u[p] = local_solver(p, graph, status, u, points)
+        u[p] = local_solver(p, graph, status, u, points, local_solver_model)
         status[p] = 'Visited'
 
         for neighbor in graph[p].nonzero()[1]:
             if status[neighbor] == 'Unvisited':
                 status[neighbor] = 'Wavefront'
-                u[neighbor] = local_solver(neighbor, graph, status, u, points)
+                u[neighbor] = local_solver(neighbor, graph, status, u, points, local_solver_model)
                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
             elif status[neighbor] == 'Wavefront':
-                new_distance = local_solver(neighbor, graph, status, u, points)
+                new_distance = local_solver(neighbor, graph, status, u, points, local_solver_model)
                 if new_distance < u[neighbor]:
                     u[neighbor] = new_distance
                     heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
@@ -213,60 +171,91 @@ def true_distances(points, radius, source_idx):
     dists[source_idx] = 0.0
     return dists
 
+def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
+    nsub_radius = make_spheres_radiuses_set(nsub=3, start_h=0.1, end_h=1.2, step=0.2) 
+    h_vals = []
+    l1_errors_dijkstra = []
+    l1_errors_FMM=[]
+    l1_errors_saar_model = []#
+    l1_errors_our_model=[]
+    np.random.seed(0)
+    for n_r in nsub_radius:
+        radius = n_r[0]
+        nsub = n_r[1]
+        #points = coordinates of each point
+        #graph = (number of node a, number of node b, edge length between a and b)
+        graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
+        source_idxs = np.random.choice(len(points), size=3, replace=False) #randomly select points from the sphere
+        print(f"h: {h}")
+        #Load the local solver (the model)
+        local_solver_saar = SpherePointNetRing()
+        local_solver_our = SpherePointNetRingAttentionAndConvolution()
+        checkpoint_saar = torch.load(saar_model_path, map_location=device)
+        checkpoint_our = torch.load(our_model_path, map_location=device)
+        local_solver_saar.load_state_dict(checkpoint_saar["model_state_dict"])
+        local_solver_saar = local_solver_saar.to(device)
+        local_solver_saar.eval()
+        local_solver_our.load_state_dict(checkpoint_our["model_state_dict"])
+        local_solver_our = local_solver_our.to(device)
+        local_solver_our.eval()
+    
+        l1_losses_dijkstra = []
+        l1_losses_FMM = []
+        l1_losses_saar_model=[]
+        l1_losses_our_model=[]
+        for source_idx in source_idxs:
+            distances_dijkstra = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
+            distances_FMM = fmm(V=points, F=faces, source_index=source_idx)
+            distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_saar)
+            distances_our_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_our)
+            true_geodesic = true_distances(points, radius, source_idx)
+            l1_losses_dijkstra.append(np.mean(np.abs(distances_dijkstra - true_geodesic)))
+            l1_losses_FMM.append(np.mean(np.abs(distances_FMM - true_geodesic)))
+            l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
+            l1_losses_our_model.append(np.mean(np.abs(distances_our_model - true_geodesic)))
+    
+        l1_loss_dijkstra = np.mean(l1_losses_dijkstra)
+        l1_loss_FMM = np.mean(l1_losses_FMM)
+        l1_loss_saar_model = np.mean(l1_losses_saar_model)
+        l1_loss_our_model = np.mean(l1_losses_our_model)
+        
+        l1_errors_dijkstra.append(l1_loss_dijkstra)
+        l1_errors_FMM.append(l1_loss_FMM)
+        l1_errors_saar_model.append(l1_loss_saar_model)
+        l1_errors_our_model.append(l1_loss_our_model)
+        h_vals.append(h)
+    
+    
+    average_slope_dijkstra = np.mean(np.diff(np.log(l1_errors_dijkstra)) / np.diff(np.log(h_vals)))
+    average_slope_FMM = np.mean(np.diff(np.log(l1_errors_FMM)) / np.diff(np.log(h_vals)))
+    average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
+    average_slope_our_model = np.mean(np.diff(np.log(l1_errors_our_model)) / np.diff(np.log(h_vals)))
+    print(f"h values: {h_vals}")
+    
+    print(f"Average slope dijkstra: {average_slope_dijkstra:.3f}")
+    print(f"Average slope FMM: {average_slope_FMM:.3f}")
+    print(f"Average slope saar_model: {average_slope_saar_model:.3f}")
+    print(f"Average slope our_model: {average_slope_our_model:.3f}")
 
-nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.1, end_h=1.2, step=0.1) 
-nsub_radius = [] ################################### remove
-h_vals = []
-l1_errors_base = []
-l1_errors_saar_model = []#
-np.random.seed(0)
-for n_r in nsub_radius:
-    radius = n_r[0]
-    nsub = n_r[1]
-    #points = coordinates of each point
-    #graph = (number of node a, number of node b, edge length between a and b)
-    graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-    source_idxs = np.random.choice(len(points), size=1, replace=False) #randomly select points from the sphere
-    print(f"h: {h}")
-
-    #Load the local solver (the model)
-    local_solver = SpherePointNetRing()
-    local_solver = SpherePointNetRingFeatureExtractionFirstRing()
-    local_solver = SpherePointNetRingAttention()
-    local_solver = SpherePointNetRingAttentionAndConvolution()
-    checkpoint = torch.load("Deep-Eikonal\checkpoints\sphere_pointnet_epoch9_loss6.9316201177493276e-06.pt", map_location=device)
-    local_solver.load_state_dict(checkpoint["model_state_dict"])
-    local_solver = local_solver.to(device)
-    local_solver.eval()
-    global_local_solver = local_solver
-
-    l1_losses_base = []
-    l1_losses_saar_model = []
-    for source_idx in source_idxs:
-        distances_base = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
-        distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
-        true_geodesic = true_distances(points, radius, source_idx)
-        l1_losses_base.append(np.mean(np.abs(distances_base - true_geodesic)))
-        l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
-        #sphere["GeodesicDistance"] = true_geodesic
-        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-        #sphere["GeodesicDistance"] = distances_regular_FMM
-        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-        #sphere["GeodesicDistance"] = distances_saar_model
-        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-
-    l1_loss_regular_FMM = np.mean(l1_losses_base)
-    l1_loss_saar_model = np.mean(l1_losses_saar_model)
-    l1_errors_base.append(l1_loss_regular_FMM)
-    l1_errors_saar_model.append(l1_loss_saar_model)
-    h_vals.append(h)
+    plot_errors(h_vals, l1_errors_dijkstra, l1_errors_FMM, l1_errors_saar_model, l1_errors_our_model, labels=["Dijkstra", "FMM", "Saar model", "Our model"])
 
 
-average_slope_regular_FMM = np.mean(np.diff(np.log(l1_errors_base)) / np.diff(np.log(h_vals)))
-average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
-print(f"h values: {h_vals}")
-print(f"Average slope base: {average_slope_regular_FMM:.3f}")
-print(f"Average slope saar model: {average_slope_saar_model:.3f}")
-plot_errors(h_vals, l1_errors_base, l1_errors_saar_model)
-print(f"l1_errors_base: {l1_errors_base}")
-print(f"l1_errors_saar_model: {l1_errors_saar_model}")
+
+if __name__ == "__main__":
+    plot_convergence_comparison_sphere(saar_model_path="checkpoints/Good_isosphere_98_epochs.pt", our_model_path="checkpoints/conv_atten_best_for_now.pt")
+
+
+
+
+
+
+
+
+#sphere["GeodesicDistance"] = true_geodesic
+#sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
+#sphere["GeodesicDistance"] = distances_regular_FMM
+#sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
+#sphere["GeodesicDistance"] = distances_saar_model
+#sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
+
+

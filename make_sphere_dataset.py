@@ -18,7 +18,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 def make_sphere(radius=1, nsub=4):
     # sphere = pv.Sphere(radius=radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     sphere = pv.Icosphere(radius=radius, nsub=nsub)  # More uniform
-    points = sphere.points.astype(np.float32)
+    points = sphere.points.astype(np.float64)
     faces = sphere.faces.reshape(-1, 4)[:, 1:]
 
     n_points = len(points)

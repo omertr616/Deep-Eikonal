@@ -8,6 +8,7 @@ from collections import deque
 from scipy.sparse import csr_matrix
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class SphereDataset(Dataset):

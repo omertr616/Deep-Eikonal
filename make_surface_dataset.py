@@ -182,7 +182,7 @@ param_grid = {**surface_functions, **mixed_functions}
 
 # -- Main loop
 all_configs = [(f, param) for f, param_list in param_grid.items() for param in param_list]
-
+i=0
 for f, param in tqdm(all_configs, desc="Generating surfaces"):
         try:
             # Detect if it's a mix (by checking for alpha)
