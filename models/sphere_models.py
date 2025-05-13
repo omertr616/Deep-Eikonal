@@ -335,6 +335,12 @@ class SpherePointNetRingAttentionAndConvolution(nn.Module):
         # mask_for_attn = mask_sorted.clone().bool().to(x.device)
         # all_false = ~mask_for_attn.any(dim=1) #Checks if there is a batch where all values are masked out which is a problem..
         # mask_for_attn[all_false, 0] = True  #for that batch, set the first value to True (keep it)
+        
+        ##############################################################
+        # Try adding noise to the input
+        x = x + 0.001 * torch.randn_like(x)
+        point_xyz = point_xyz + 0.001 * torch.randn_like(point_xyz)
+        ##############################################################
 
         x, min_distances = preprocess_input_for_attention(x, point_xyz, mask)
         mask_for_attn = mask.clone().bool().to(x.device)

@@ -213,60 +213,60 @@ def true_distances(points, radius, source_idx):
     dists[source_idx] = 0.0
     return dists
 
+if __name__ == "__main__":
+    nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.1, end_h=1.2, step=0.1) 
+    nsub_radius = [] ################################### remove
+    h_vals = []
+    l1_errors_base = []
+    l1_errors_saar_model = []#
+    np.random.seed(0)
+    for n_r in nsub_radius:
+        radius = n_r[0]
+        nsub = n_r[1]
+        #points = coordinates of each point
+        #graph = (number of node a, number of node b, edge length between a and b)
+        graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
+        source_idxs = np.random.choice(len(points), size=1, replace=False) #randomly select points from the sphere
+        print(f"h: {h}")
 
-nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.1, end_h=1.2, step=0.1) 
-nsub_radius = [] ################################### remove
-h_vals = []
-l1_errors_base = []
-l1_errors_saar_model = []#
-np.random.seed(0)
-for n_r in nsub_radius:
-    radius = n_r[0]
-    nsub = n_r[1]
-    #points = coordinates of each point
-    #graph = (number of node a, number of node b, edge length between a and b)
-    graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-    source_idxs = np.random.choice(len(points), size=1, replace=False) #randomly select points from the sphere
-    print(f"h: {h}")
+        #Load the local solver (the model)
+        local_solver = SpherePointNetRing()
+        local_solver = SpherePointNetRingFeatureExtractionFirstRing()
+        local_solver = SpherePointNetRingAttention()
+        local_solver = SpherePointNetRingAttentionAndConvolution()
+        checkpoint = torch.load("Deep-Eikonal\checkpoints\sphere_pointnet_epoch9_loss6.9316201177493276e-06.pt", map_location=device)
+        local_solver.load_state_dict(checkpoint["model_state_dict"])
+        local_solver = local_solver.to(device)
+        local_solver.eval()
+        global_local_solver = local_solver
 
-    #Load the local solver (the model)
-    local_solver = SpherePointNetRing()
-    local_solver = SpherePointNetRingFeatureExtractionFirstRing()
-    local_solver = SpherePointNetRingAttention()
-    local_solver = SpherePointNetRingAttentionAndConvolution()
-    checkpoint = torch.load("Deep-Eikonal\checkpoints\sphere_pointnet_epoch9_loss6.9316201177493276e-06.pt", map_location=device)
-    local_solver.load_state_dict(checkpoint["model_state_dict"])
-    local_solver = local_solver.to(device)
-    local_solver.eval()
-    global_local_solver = local_solver
+        l1_losses_base = []
+        l1_losses_saar_model = []
+        for source_idx in source_idxs:
+            distances_base = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
+            distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
+            true_geodesic = true_distances(points, radius, source_idx)
+            l1_losses_base.append(np.mean(np.abs(distances_base - true_geodesic)))
+            l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
+            #sphere["GeodesicDistance"] = true_geodesic
+            #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
+            #sphere["GeodesicDistance"] = distances_regular_FMM
+            #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
+            #sphere["GeodesicDistance"] = distances_saar_model
+            #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
 
-    l1_losses_base = []
-    l1_losses_saar_model = []
-    for source_idx in source_idxs:
-        distances_base = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
-        distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3)
-        true_geodesic = true_distances(points, radius, source_idx)
-        l1_losses_base.append(np.mean(np.abs(distances_base - true_geodesic)))
-        l1_losses_saar_model.append(np.mean(np.abs(distances_saar_model - true_geodesic)))
-        #sphere["GeodesicDistance"] = true_geodesic
-        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-        #sphere["GeodesicDistance"] = distances_regular_FMM
-        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-        #sphere["GeodesicDistance"] = distances_saar_model
-        #sphere.plot(scalars="GeodesicDistance", cmap="viridis", show_edges=False)
-
-    l1_loss_regular_FMM = np.mean(l1_losses_base)
-    l1_loss_saar_model = np.mean(l1_losses_saar_model)
-    l1_errors_base.append(l1_loss_regular_FMM)
-    l1_errors_saar_model.append(l1_loss_saar_model)
-    h_vals.append(h)
+        l1_loss_regular_FMM = np.mean(l1_losses_base)
+        l1_loss_saar_model = np.mean(l1_losses_saar_model)
+        l1_errors_base.append(l1_loss_regular_FMM)
+        l1_errors_saar_model.append(l1_loss_saar_model)
+        h_vals.append(h)
 
 
-average_slope_regular_FMM = np.mean(np.diff(np.log(l1_errors_base)) / np.diff(np.log(h_vals)))
-average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
-print(f"h values: {h_vals}")
-print(f"Average slope base: {average_slope_regular_FMM:.3f}")
-print(f"Average slope saar model: {average_slope_saar_model:.3f}")
-plot_errors(h_vals, l1_errors_base, l1_errors_saar_model)
-print(f"l1_errors_base: {l1_errors_base}")
-print(f"l1_errors_saar_model: {l1_errors_saar_model}")
+    average_slope_regular_FMM = np.mean(np.diff(np.log(l1_errors_base)) / np.diff(np.log(h_vals)))
+    average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
+    print(f"h values: {h_vals}")
+    print(f"Average slope base: {average_slope_regular_FMM:.3f}")
+    print(f"Average slope saar model: {average_slope_saar_model:.3f}")
+    plot_errors(h_vals, l1_errors_base, l1_errors_saar_model)
+    print(f"l1_errors_base: {l1_errors_base}")
+    print(f"l1_errors_saar_model: {l1_errors_saar_model}")

@@ -5,3 +5,6 @@ mixed_data/
 __pycache__/
 *.pyc
 *.pyo
+fast_matching_python
+generated_surfaces_high_res/
+high_resolution/

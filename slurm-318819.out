@@ -1,0 +1,121 @@
+Generating surfaces:   0%|          | 0/40 [00:00<?, ?it/s][                                                  ] 0%                                                  ] 0%Generating surfaces:   2%|▎         | 1/40 [05:37<3:39:35, 337.83s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:   5%|▌         | 2/40 [11:17<3:34:35, 338.82s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:   8%|▊         | 3/40 [16:44<3:25:43, 333.60s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  10%|█         | 4/40 [22:12<3:18:41, 331.16s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  12%|█▎        | 5/40 [27:34<3:11:21, 328.04s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  15%|█▌        | 6/40 [32:55<3:04:34, 325.72s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  18%|█▊        | 7/40 [38:15<2:57:59, 323.63s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  20%|██        | 8/40 [43:43<2:53:26, 325.21s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  22%|██▎       | 9/40 [49:05<2:47:30, 324.22s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  25%|██▌       | 10/40 [54:37<2:43:11, 326.40s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  28%|██▊       | 11/40 [1:00:12<2:39:09, 329.28s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  30%|███       | 12/40 [1:05:44<2:33:59, 329.97s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  32%|███▎      | 13/40 [1:11:14<2:28:32, 330.09s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  35%|███▌      | 14/40 [1:16:44<2:22:56, 329.88s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  38%|███▊      | 15/40 [1:22:19<2:18:07, 331.50s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  40%|████      | 16/40 [1:27:50<2:12:33, 331.38s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  42%|████▎     | 17/40 [1:33:18<2:06:36, 330.28s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  45%|████▌     | 18/40 [1:38:47<2:00:58, 329.93s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  48%|████▊     | 19/40 [1:44:16<1:55:26, 329.82s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  50%|█████     | 20/40 [1:49:46<1:49:56, 329.81s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  52%|█████▎    | 21/40 [1:55:17<1:44:34, 330.23s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  55%|█████▌    | 22/40 [2:00:57<1:39:56, 333.13s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  57%|█████▊    | 23/40 [2:06:39<1:35:08, 335.80s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  60%|██████    | 24/40 [2:12:24<1:30:14, 338.39s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  62%|██████▎   | 25/40 [2:18:10<1:25:09, 340.63s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  65%|██████▌   | 26/40 [2:23:33<1:18:17, 335.55s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  68%|██████▊   | 27/40 [2:29:04<1:12:24, 334.17s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  70%|███████   | 28/40 [2:34:33<1:06:30, 332.50s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  72%|███████▎  | 29/40 [2:40:06<1:00:59, 332.72s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  75%|███████▌  | 30/40 [2:45:32<55:06, 330.66s/it]  [                                                  ] 0%                                                  ] 0%Generating surfaces:  78%|███████▊  | 31/40 [2:50:56<49:18, 328.72s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  80%|████████  | 32/40 [2:56:19<43:36, 327.03s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  82%|████████▎ | 33/40 [3:01:45<38:07, 326.72s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  85%|████████▌ | 34/40 [3:07:10<32:35, 325.98s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  88%|████████▊ | 35/40 [3:12:32<27:05, 325.00s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  90%|█████████ | 36/40 [3:17:55<21:37, 324.45s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  92%|█████████▎| 37/40 [3:23:18<16:11, 323.91s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  95%|█████████▌| 38/40 [3:28:24<10:36, 318.38s/it][                                                  ] 0%                                                  ] 0%Generating surfaces:  98%|█████████▊| 39/40 [3:33:30<05:14, 314.74s/it][                                                  ] 0%                                                  ] 0%Generating surfaces: 100%|██████████| 40/40 [3:38:35<00:00, 311.91s/it]Generating surfaces: 100%|██████████| 40/40 [3:38:35<00:00, 327.89s/it]
+ripple with params {'A': 0.5, 'k': 1}, high resolution h = 0.005137381315493601
+sparse resolution h = 0.21805690403065306
+✓ Saved function_ripple_0_h_0.218_source_2447.txt (h = 0.218, points = 2958)
+ripple with params {'A': 0.5, 'k': 2}, high resolution h = 0.005573114084899711
+sparse resolution h = 0.23637116029101007
+✓ Saved function_ripple_1_h_0.236_source_2722.txt (h = 0.236, points = 2958)
+ripple with params {'A': 0.5, 'k': 2.5}, high resolution h = 0.005841282811152356
+sparse resolution h = 0.24729504199601857
+✓ Saved function_ripple_2_h_0.247_source_1098.txt (h = 0.247, points = 2958)
+ripple with params {'A': 1.0, 'k': 1}, high resolution h = 0.00550652755791264
+sparse resolution h = 0.2337245605350092
+✓ Saved function_ripple_3_h_0.234_source_1338.txt (h = 0.234, points = 2958)
+ripple with params {'A': 1.0, 'k': 2}, high resolution h = 0.006873469971696839
+sparse resolution h = 0.2912796943517812
+✓ Saved function_ripple_4_h_0.291_source_1278.txt (h = 0.291, points = 2958)
+ripple with params {'A': 1.0, 'k': 2.5}, high resolution h = 0.007619941673023472
+sparse resolution h = 0.3218457763187957
+✓ Saved function_ripple_5_h_0.322_source_1775.txt (h = 0.322, points = 2958)
+gaussian_hill with params {'A': 1, 'sigma': 1.0}, high resolution h = 0.005038205347834578
+sparse resolution h = 0.21385861782342172
+✓ Saved function_gaussian_hill_6_h_0.214_source_464.txt (h = 0.214, points = 2958)
+gaussian_hill with params {'A': 1, 'sigma': 1.5}, high resolution h = 0.005039072209225612
+sparse resolution h = 0.21391255775497126
+✓ Saved function_gaussian_hill_7_h_0.214_source_2197.txt (h = 0.214, points = 2958)
+gaussian_hill with params {'A': 1, 'sigma': 2.0}, high resolution h = 0.005039159310976587
+sparse resolution h = 0.21391569991629464
+✓ Saved function_gaussian_hill_8_h_0.214_source_580.txt (h = 0.214, points = 2958)
+gaussian_hill with params {'A': 3, 'sigma': 1.0}, high resolution h = 0.005274909177065754
+sparse resolution h = 0.2239313121242337
+✓ Saved function_gaussian_hill_9_h_0.224_source_2349.txt (h = 0.224, points = 2958)
+gaussian_hill with params {'A': 3, 'sigma': 1.5}, high resolution h = 0.0053075232251008865
+sparse resolution h = 0.22543410336758982
+✓ Saved function_gaussian_hill_10_h_0.225_source_2582.txt (h = 0.225, points = 2958)
+gaussian_hill with params {'A': 3, 'sigma': 2.0}, high resolution h = 0.005321892288617202
+sparse resolution h = 0.22604365868377002
+✓ Saved function_gaussian_hill_11_h_0.226_source_490.txt (h = 0.226, points = 2958)
+mexican_hat with params {'A': 1, 'sigma': 1.0}, high resolution h = 0.005102261192983175
+sparse resolution h = 0.21652701530491558
+✓ Saved function_mexican_hat_12_h_0.217_source_78.txt (h = 0.217, points = 2958)
+mexican_hat with params {'A': 1, 'sigma': 1.5}, high resolution h = 0.0051093495999155
+sparse resolution h = 0.21688176960140543
+✓ Saved function_mexican_hat_13_h_0.217_source_140.txt (h = 0.217, points = 2958)
+mexican_hat with params {'A': 1, 'sigma': 2.0}, high resolution h = 0.0051067290395887584
+sparse resolution h = 0.21680217967066165
+✓ Saved function_mexican_hat_14_h_0.217_source_2139.txt (h = 0.217, points = 2958)
+mexican_hat with params {'A': 3, 'sigma': 1.0}, high resolution h = 0.005619874328716533
+sparse resolution h = 0.2383638958544607
+✓ Saved function_mexican_hat_15_h_0.238_source_2115.txt (h = 0.238, points = 2958)
+mexican_hat with params {'A': 3, 'sigma': 1.5}, high resolution h = 0.005739555650763354
+sparse resolution h = 0.24368972849064482
+✓ Saved function_mexican_hat_16_h_0.244_source_1379.txt (h = 0.244, points = 2958)
+mexican_hat with params {'A': 3, 'sigma': 2.0}, high resolution h = 0.005766753762685203
+sparse resolution h = 0.24502010905969876
+✓ Saved function_mexican_hat_17_h_0.245_source_513.txt (h = 0.245, points = 2958)
+saddle with params {'a': 1.5, 'b': 1.5}, high resolution h = 0.012417906627143456
+sparse resolution h = 0.5236877886071933
+✓ Saved function_saddle_18_h_0.524_source_448.txt (h = 0.524, points = 2958)
+saddle with params {'a': 1.5, 'b': 2.0}, high resolution h = 0.010466162290752421
+sparse resolution h = 0.45291248761146313
+✓ Saved function_saddle_19_h_0.453_source_1742.txt (h = 0.453, points = 2958)
+saddle with params {'a': 2.0, 'b': 1.5}, high resolution h = 0.010533127927103113
+sparse resolution h = 0.43244756323403916
+✓ Saved function_saddle_20_h_0.432_source_2036.txt (h = 0.432, points = 2958)
+saddle with params {'a': 2.0, 'b': 2.0}, high resolution h = 0.00829693860161758
+sparse resolution h = 0.35047938894805714
+✓ Saved function_saddle_21_h_0.350_source_2945.txt (h = 0.350, points = 2958)
+paraboloid with params {'a': 1.5, 'b': 1.5}, high resolution h = 0.012417906627511773
+sparse resolution h = 0.5281429706784178
+✓ Saved function_paraboloid_22_h_0.528_source_1511.txt (h = 0.528, points = 2958)
+paraboloid with params {'a': 1.5, 'b': 2.0}, high resolution h = 0.010466162290936299
+sparse resolution h = 0.45561262528977114
+✓ Saved function_paraboloid_23_h_0.456_source_2842.txt (h = 0.456, points = 2958)
+paraboloid with params {'a': 2.0, 'b': 1.5}, high resolution h = 0.01053312792731883
+sparse resolution h = 0.435462706819486
+✓ Saved function_paraboloid_24_h_0.435_source_149.txt (h = 0.435, points = 2958)
+paraboloid with params {'a': 2.0, 'b': 2.0}, high resolution h = 0.008296938601801784
+sparse resolution h = 0.35257659583305756
+✓ Saved function_paraboloid_25_h_0.353_source_538.txt (h = 0.353, points = 2958)
+grid_waves with params {'A': 0.3, 'kx': 2, 'ky': 2}, high resolution h = 0.005437139856109804
+sparse resolution h = 0.23064115009983246
+✓ Saved function_grid_waves_26_h_0.231_source_2218.txt (h = 0.231, points = 2958)
+grid_waves with params {'A': 0.3, 'kx': 2, 'ky': 3}, high resolution h = 0.005649162259734115
+sparse resolution h = 0.23843251512136082
+✓ Saved function_grid_waves_27_h_0.238_source_1818.txt (h = 0.238, points = 2958)
+grid_waves with params {'A': 0.3, 'kx': 3, 'ky': 2}, high resolution h = 0.005647457724499953
+sparse resolution h = 0.2400937263924999
+✓ Saved function_grid_waves_28_h_0.240_source_810.txt (h = 0.240, points = 2958)
+grid_waves with params {'A': 0.3, 'kx': 3, 'ky': 3}, high resolution h = 0.005850699120743362
+sparse resolution h = 0.24752617926283532
+✓ Saved function_grid_waves_29_h_0.248_source_2556.txt (h = 0.248, points = 2958)
+grid_waves with params {'A': 0.6, 'kx': 2, 'ky': 2}, high resolution h = 0.006500514684696244
+sparse resolution h = 0.27566664634292637
+✓ Saved function_grid_waves_30_h_0.276_source_1118.txt (h = 0.276, points = 2958)
+grid_waves with params {'A': 0.6, 'kx': 2, 'ky': 3}, high resolution h = 0.007134362697601963
+sparse resolution h = 0.29861440596725736
+✓ Saved function_grid_waves_31_h_0.299_source_1814.txt (h = 0.299, points = 2958)
+grid_waves with params {'A': 0.6, 'kx': 3, 'ky': 2}, high resolution h = 0.007111575954987339
+sparse resolution h = 0.3037217963233322
+✓ Saved function_grid_waves_32_h_0.304_source_2937.txt (h = 0.304, points = 2958)
+grid_waves with params {'A': 0.6, 'kx': 3, 'ky': 3}, high resolution h = 0.007699982427914423
+sparse resolution h = 0.32486389205756433
+✓ Saved function_grid_waves_33_h_0.325_source_182.txt (h = 0.325, points = 2958)
+omer_test with params {'A': 1.0, 'k': 0.2}, high resolution h = 0.006185150099695629
+sparse resolution h = 0.26223166778977514
+✓ Saved function_omer_test_34_h_0.262_source_2920.txt (h = 0.262, points = 2958)
+omer_test with params {'A': 1.0, 'k': 0.3}, high resolution h = 0.007350634528603062
+sparse resolution h = 0.311221984620101
+✓ Saved function_omer_test_35_h_0.311_source_410.txt (h = 0.311, points = 2958)
+omer_test with params {'A': 1.0, 'k': 0.4}, high resolution h = 0.008644846665322264
+sparse resolution h = 0.36348798364070245
+✓ Saved function_omer_test_36_h_0.363_source_1386.txt (h = 0.363, points = 2958)
+omer_test with params {'A': 0.5, 'k': 0.2}, high resolution h = 0.0053552622386195394
+sparse resolution h = 0.22716450486455145
+✓ Saved function_omer_test_37_h_0.227_source_2610.txt (h = 0.227, points = 2958)
+omer_test with params {'A': 0.5, 'k': 0.3}, high resolution h = 0.0057667765913475355
+sparse resolution h = 0.24437524863692592
+✓ Saved function_omer_test_38_h_0.244_source_716.txt (h = 0.244, points = 2958)
+omer_test with params {'A': 0.5, 'k': 0.4}, high resolution h = 0.00626627979745372
+sparse resolution h = 0.26443310656171554
+✓ Saved function_omer_test_39_h_0.264_source_1675.txt (h = 0.264, points = 2958)
