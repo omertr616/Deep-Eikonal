@@ -8,7 +8,7 @@ import os
 import random
 
 # ---------- Config ----------
-OUTPUT_DIR = "DeepEikonal/generated_spheres/train_spheres"
+OUTPUT_DIR = "generated_spheres/train_spheres/small_spheres"
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -54,7 +54,7 @@ def true_distances(points, radius, source_idx):
 
     return true_distances
 
-def make_spheres_radiuses_set(nsub=4, start_h=0.1, end_h=1.6, step=0.1):   #to calculate desired h and get r,nsub
+def make_spheres_radiuses_set(nsub=4, start_h=0.05, end_h=0.8, step=0.05):   #to calculate desired h and get r,nsub
     graph, faces, points, sphere, h = make_sphere(radius=1, nsub=nsub)
     radiuses = (np.arange(start_h, end_h, step) / h)  #here we change
     nsub_radises = [(r, nsub) for r in radiuses] 

@@ -1,12 +1,14 @@
 import os
 import torch
 import heapq
-import pyvista as pv
+import random
 import numpy as np
+import pyvista as pv
 from collections import deque
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
+from scipy.spatial import Delaunay
 from scipy.sparse import csr_matrix
 from fast_matching_python.fast_marching import fast_marching
 from models.sphere_models import SpherePointNetRing, SpherePointNetRingFeatureExtractionFirstRing, SpherePointNetRingAttention, SpherePointNetRingAttentionAndConvolution
@@ -241,9 +243,161 @@ def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
 
 
 
-if __name__ == "__main__":
-    plot_convergence_comparison_sphere(saar_model_path="checkpoints/Good_isosphere_98_epochs.pt", our_model_path="checkpoints/conv_atten_best_for_now.pt")
+def evaluate_algorithms_on_mesh_with_ground_truth(
+    graph, faces, points, h, source_idx, true_geodesic,
+    saar_model_path, our_model_path
+):
+    """
+    Evaluate 4 distance solvers against provided true geodesic for one source.
 
+    Parameters:
+    - graph, faces, points: Mesh representation
+    - h: Mean edge length
+    - source_idx: Index of source point
+    - true_geodesic: Ground truth distance array (np.ndarray of shape [N])
+    - saar_model_path, our_model_path: Paths to model checkpoints
+    """
+    print(f"▶ Evaluating on mesh with h = {h:.5f}, source_idx = {source_idx}, #points = {len(points)}")
+
+    # Load models
+    local_solver_saar = SpherePointNetRing()
+    local_solver_our = SpherePointNetRingAttentionAndConvolution()
+
+    checkpoint_saar = torch.load(saar_model_path, map_location=device)
+    checkpoint_our = torch.load(our_model_path, map_location=device)
+
+    local_solver_saar.load_state_dict(checkpoint_saar["model_state_dict"])
+    local_solver_our.load_state_dict(checkpoint_our["model_state_dict"])
+
+    local_solver_saar = local_solver_saar.to(device).eval()
+    local_solver_our = local_solver_our.to(device).eval()
+
+    # Run all solvers
+    distances_dijkstra = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
+    distances_FMM = fmm(V=points, F=faces, source_index=source_idx)
+    distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_saar)
+    distances_our_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_our)
+
+    # Compute L1 errors
+    l1_dijkstra = np.mean(np.abs(distances_dijkstra - true_geodesic))
+    l1_FMM = np.mean(np.abs(distances_FMM - true_geodesic))
+    l1_saar = np.mean(np.abs(distances_saar_model - true_geodesic))
+    l1_our = np.mean(np.abs(distances_our_model - true_geodesic))
+
+    # Report
+    print(f"✅ L1 error - Dijkstra:    {l1_dijkstra:.6f}")
+    print(f"✅ L1 error - FMM (C++):   {l1_FMM:.6f}")
+    print(f"✅ L1 error - Saar Model:  {l1_saar:.6f}")
+    print(f"✅ L1 error - Our Model:   {l1_our:.6f}")
+
+
+
+
+def make_uniform_surface_multimesh(f=None, radius=1.0, spacing=0.01, sparse_strides=[10]):
+    """
+    Generate a fine and coarse uniform triangular mesh over z = f(x,y)
+    Returns:
+        (fine_graph, fine_faces, fine_points, fine_mesh, fine_h),
+        (coarse_graph, coarse_faces, coarse_points, coarse_mesh, coarse_h)
+    """
+    if f is None:
+        f = lambda x, y: np.sin(np.pi * x) * np.sin(np.pi * y)
+        
+        
+    # === Helper to build graph and h ===
+    def build_graph_and_h(points3d, faces):
+        edge_set = set()
+        rows, cols, dists, edge_lengths = [], [], [], []
+        for face in faces:
+            for i in range(3):
+                a, b = face[i], face[(i+1)%3]
+                edge = tuple(sorted((a,b)))
+                if edge not in edge_set:
+                    edge_set.add(edge)
+                    dist = np.linalg.norm(points3d[a] - points3d[b])
+                    edge_lengths.append(dist)
+                    rows += [a, b]
+                    cols += [b, a]
+                    dists += [dist, dist]
+        graph = csr_matrix((dists, (rows, cols)), shape=(len(points3d), len(points3d)))
+        h = np.mean(edge_lengths)
+        return graph, h
+
+
+    # === Fine hex grid ===
+    x_range = np.arange(-radius, radius + spacing, spacing)
+    y_range = np.arange(-radius, radius + spacing * np.sqrt(3)/2, spacing * np.sqrt(3)/2)
+    xx, yy = np.meshgrid(x_range, y_range)
+    xx[::2, :] += spacing / 2  # Hexagonal shift
+
+    x_fine = xx.ravel()
+    y_fine = yy.ravel()
+    z_fine = f(x_fine, y_fine)
+    points2d_fine = np.column_stack((x_fine, y_fine))
+    points3d_fine = np.column_stack((x_fine, y_fine, z_fine)).astype(np.float32)
+
+    tri_fine = Delaunay(points2d_fine)
+    faces_fine = tri_fine.simplices
+
+    mesh_fine = pv.PolyData()
+    mesh_fine.points = points3d_fine
+    mesh_fine.faces = np.hstack([[3, *face] for face in faces_fine])
+
+    graph_fine, h_fine = build_graph_and_h(points3d_fine, faces_fine)
+
+    # === Coarse mesh: subsample using stride in 2D grid ===
+    sub_meshes = []
+    for sparse_stride in sparse_strides:
+        mask = np.zeros(xx.shape, dtype=bool)
+        mask[::sparse_stride, ::sparse_stride] = True
+        x_coarse = xx[mask]
+        y_coarse = yy[mask]
+        z_coarse = f(x_coarse, y_coarse)
+        points2d_coarse = np.column_stack((x_coarse, y_coarse))
+        points3d_coarse = np.column_stack((x_coarse, y_coarse, z_coarse)).astype(np.float32)
+
+        tri_coarse = Delaunay(points2d_coarse)
+        faces_coarse = tri_coarse.simplices
+
+        mesh_coarse = pv.PolyData()
+        mesh_coarse.points = points3d_coarse
+        mesh_coarse.faces = np.hstack([[3, *face] for face in faces_coarse])
+
+        
+        graph_coarse, h_coarse = build_graph_and_h(points3d_coarse, faces_coarse)
+        
+        sub_meshes.append((graph_coarse, faces_coarse, points3d_coarse, mesh_coarse, h_coarse))
+
+
+    coordinates_to_fine_point_index = {tuple(coor): idx for idx, coor in enumerate(points3d_fine)}
+    return ((graph_fine, faces_fine, points3d_fine, mesh_fine, h_fine), sub_meshes, coordinates_to_fine_point_index)
+
+
+def test_on_surface(saar_model_path, our_model_path):
+    def twist_saddle(x, y):
+        a = 1.2
+        b = 0.8
+        twist = 2.5
+        return a * x**2 - b * y**2 + 0.2 * np.sin(twist * (x + y))
+    surface_func = twist_saddle
+    (graph_high_res, faces_high_res, points3d_high_res, mesh_high_res, h_high_res), sub_meshes, coor_to_index = \
+                make_uniform_surface_multimesh(f=surface_func, radius=5, spacing=0.01, sparse_strides=[10, 20])
+
+    for graph_sparse, faces_sparse, points3d_sparse, mesh_sparse, h_sparse in sub_meshes:
+        print(f'sparse resolution h = {h_sparse}')
+        sparse_source_idx = random.randint(0, len(points3d_sparse) - 1)
+        high_res_source_idx = coor_to_index[tuple(points3d_sparse[sparse_source_idx])]
+        print("starting FMM")
+        distances_high_res = fmm(V=points3d_high_res, F=faces_high_res, source_index=high_res_source_idx)
+        sparse_points_tuples = [tuple(p) for p in points3d_sparse]
+        mask = [coor_to_index[p] for p in sparse_points_tuples]
+        sparse_distances = distances_high_res[mask]
+        evaluate_algorithms_on_mesh_with_ground_truth(graph=graph_sparse, faces=faces_sparse, points=points3d_sparse, h=h_sparse, source_idx=sparse_source_idx, true_geodesic=sparse_distances,saar_model_path=saar_model_path, our_model_path=our_model_path)
+        
+
+if __name__ == "__main__":
+    #plot_convergence_comparison_sphere(saar_model_path="checkpoints/Good_isosphere_98_epochs.pt", our_model_path="checkpoints/conv_atten_best_for_now.pt")
+    test_on_surface(saar_model_path="checkpoints/Good_isosphere_98_epochs.pt", our_model_path="checkpoints/conv_atten_best_for_now.pt")
 
 
 

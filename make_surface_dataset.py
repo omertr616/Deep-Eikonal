@@ -143,7 +143,7 @@ if __name__ == "__main__":
     def mix_surfaces(f1, f2, alpha=0.5):
         return lambda x, y: alpha*f1(x, y) + (1-alpha)*f2(x, y)
     
-    import os
+import os
 import random
 
 OUTPUT_DIR = "generated_surfaces/train_surfaces"
