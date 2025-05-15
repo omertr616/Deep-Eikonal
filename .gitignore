@@ -8,3 +8,4 @@ __pycache__/
 fast_matching_python
 generated_surfaces_high_res/
 high_resolution/
+slurm/

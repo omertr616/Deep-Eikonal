@@ -338,8 +338,8 @@ class SpherePointNetRingAttentionAndConvolution(nn.Module):
         
         ##############################################################
         # Try adding noise to the input
-        x = x + 0.001 * torch.randn_like(x)
-        point_xyz = point_xyz + 0.001 * torch.randn_like(point_xyz)
+        # x = x + 0.001 * torch.randn_like(x)
+        # point_xyz = point_xyz + 0.001 * torch.randn_like(point_xyz)
         ##############################################################
 
         x, min_distances = preprocess_input_for_attention(x, point_xyz, mask)

@@ -10,10 +10,10 @@ import os
 torch.set_default_dtype(torch.float64)
 
 # ---------- Config ----------
-data_path = "generated_spheres/train_spheres/"
+data_path = "high_resolution/mix"
 ring = 3
 epochs = 100
-batch_size = 16
+batch_size = 128
 lr = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 load_checkpoint = False
