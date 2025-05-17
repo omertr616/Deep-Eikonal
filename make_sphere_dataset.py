@@ -62,10 +62,10 @@ def make_spheres_radiuses_set(nsub=4, start_h=0.05, end_h=0.8, step=0.05):   #to
     return nsub_radises
 
 def generate_dataset(save_dir):
-    for i in range (2, 6): #range for nsub
+    for i in range (4, 6): #range for nsub
         nsub_radius = make_spheres_radiuses_set(nsub=i, start_h=0.1, end_h=1.6, step=0.1)
         for radius, nsub in nsub_radius: #for the specific nsub, play with the radius to get h between 0.1 and something
-            for j in range(10): #make x random sources for this ball
+            for j in range(1): #make x random sources for this ball
                 graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
                 source_idx = random.randint(0, len(points) - 1)
                 distances = true_distances(points, radius, source_idx)

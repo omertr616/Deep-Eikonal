@@ -11,31 +11,23 @@ import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from scipy.spatial import Delaunay
 from scipy.sparse import csr_matrix
-from fast_matching_python.fast_marching import fast_marching
-from models.sphere_models import SpherePointNetRing, SpherePointNetRingFeatureExtractionFirstRing, SpherePointNetRingAttention, SpherePointNetRingAttentionAndConvolution, SpherePointNetRingAttentionAndConvolution2
+from models.sphere_models import *
 import sys
-sys.path.append("/home/kizner.gil/ron/project_ron_conv_attention0405/Deep-Eikonal")
+torch.set_default_dtype(torch.float64)
+sys.path.append("C:/Users/kizner.gil/Desktop/Technion/9/ראיה חישובית גיאומטרית/project_isosphere_22_4/DeepEikonal")  # Add the path to your module
 
 global_local_solver = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def fmm(V: np.ndarray, F: np.ndarray, source_index=0) -> np.ndarray:
-    tmp_off = "/tmp/mesh.off"
-    with open(tmp_off, "w") as f:
-        f.write("OFF\n")
-        f.write(f"{len(V)} {len(F)} 0\n")
-        for vert in V:
-            f.write(f"{vert[0]} {vert[1]} {vert[2]}\n")
-        for face in F:
-            f.write(f"3 {face[0]} {face[1]} {face[2]}\n")
-    D = fast_marching.fast_marching(data_dir=tmp_off, source_index=source_index, verbose=True)  # if 'source' is the correct argument name
-    return np.asarray(D)
+#----------------------------------------------------------------------------
+#--------------------------Helper functions----------------------------------
+#----------------------------------------------------------------------------
 
 def make_sphere(radius=1.0, nsub=3):
     # sphere = pv.Sphere(radius=radius, theta_resolution=theta_resolution//2, phi_resolution=phi_resolution)
     sphere = pv.Icosphere(radius=radius, nsub=nsub)  # More uniform
 
-    points = sphere.points.astype(np.float32)
+    points = sphere.points.astype(np.float64)
     faces = sphere.faces.reshape(-1, 4)[:, 1:]
 
     n_points = len(points)
@@ -61,7 +53,7 @@ def make_sphere(radius=1.0, nsub=3):
     return graph, faces, points, sphere, h
 
 
-def plot_errors(h_values, *error_series, labels=None, save_path="plots/convergence_plot.png"):
+def plot_errors(h_values, *error_series, labels=None, save_path="plots/convergence_plot_new.png"):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     plt.figure()
     for i, errors in enumerate(error_series):
@@ -95,10 +87,15 @@ def get_3_ring_visited_neighbors(p, graph, status, u, points, local_solver_model
                 seen.add(neighbor)
                 queue.append((neighbor, depth + 1))
 
-    return torch.tensor(visited, dtype=torch.float32).T  # Shape: [4, N]
+    return torch.tensor(visited, dtype=torch.float64).T  # Shape: [4, N] 
 
 
-def local_solver_dijkstra(p, graph, status, u, points, local_solver_model):
+#----------------------------------------------------------------------------
+#---------------------------Local solvers------------------------------------
+#----------------------------------------------------------------------------
+
+                          
+def local_solver_dijkstra(p, graph, status, u, points, faces, local_solver_model):
     min_val = np.inf
     for neighbor in graph[p].nonzero()[1]:
         if status[neighbor] == 'Visited':
@@ -107,15 +104,15 @@ def local_solver_dijkstra(p, graph, status, u, points, local_solver_model):
                 min_val = candidate
     return min_val
 
-
-def local_solver_model_ring3(p, graph, status, u, points, local_solver_model): #fast
-    visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points, local_solver_model).to(device)  # shape: (4, N) with N ≤ 90
+                            
+def local_solver_model_ring3(p, graph, status, u, points, faces, local_solver_model): #fast
+    visited_neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points, local_solver_model).to(device).double()  # shape: (4, N) with N ≤ 90
     num_valid = visited_neighbors.shape[1]
     visited_neighbors_padded = F.pad(visited_neighbors, (0, 90 - num_valid), "constant", 0).unsqueeze(0)  # (1, 4, 90)
-    mask = torch.zeros(90, dtype=torch.float32)
+    mask = torch.zeros(90, dtype=torch.float64)
     mask[:num_valid] = 1
     mask = mask.unsqueeze(0)  # (1, 90)
-    point_xyz = torch.tensor(points[p], dtype=torch.float32).unsqueeze(0)  # (1, 3)
+    point_xyz = torch.tensor(points[p], dtype=torch.float64).unsqueeze(0)  # (1, 3)
     visited_neighbors_padded = visited_neighbors_padded.to(device)
     point_xyz = point_xyz.to(device)
     mask = mask.to(device)
@@ -124,7 +121,132 @@ def local_solver_model_ring3(p, graph, status, u, points, local_solver_model): #
     return distance_estimation
 
 
-def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver, local_solver_model=None):  #Implementation of the "real" FMM
+def local_solver_triangle_geometric(p, graph, status, u, points, faces, local_solver_model=None):
+    epsilon = 1e-7
+    best_u = np.inf
+    xp = points[p].astype(np.float64)
+
+    for face in faces:
+        if p not in face:
+            continue
+
+        a, b = [v for v in face if v != p]
+        if status[a] != 'Visited' or status[b] != 'Visited':
+            continue
+
+        ua, ub = float(u[a]), float(u[b])
+        xa = points[a].astype(np.float64)
+        xb = points[b].astype(np.float64)
+
+        va = xa - xp
+        vb = xb - xp
+        X = np.stack((va, vb), axis=1)
+
+        XtX = X.T @ X
+        try:
+            Q = np.linalg.pinv(XtX)
+        except np.linalg.LinAlgError:
+            continue
+
+        ones = np.ones(2)
+        t = np.array([ua, ub])
+        delta = ones @ Q @ t
+        A = ones @ Q @ ones
+        B = t @ Q @ t - 1
+        discriminant = delta ** 2 - A * B
+
+        if discriminant >= 0:
+            p_est = (delta + np.sqrt(discriminant)) / A
+            if p_est >= max(ua, ub) - epsilon and p_est < best_u:
+                best_u = p_est
+        else:
+            # Fallback: direct edge-based
+            dp0 = ua + np.linalg.norm(va)
+            dp1 = ub + np.linalg.norm(vb)
+            fallback_u = min(dp0, dp1)
+            if fallback_u < best_u:
+                best_u = fallback_u
+
+    # Final fallback to Dijkstra-style
+    if best_u == np.inf:
+        best_u = min(
+            u[n] + np.linalg.norm(points[p] - points[n])
+            for n in range(len(points))
+            if status[n] == 'Visited'
+        )
+
+    return best_u
+
+
+def local_solver_triangle_geometric_nn(p, graph, status, u, points, faces, local_solver_model=None):
+    epsilon = 1e-7
+    best_u = np.inf
+    xp = points[p].astype(np.float64)
+
+    for face in faces:
+        if p not in face:
+            continue
+
+        a, b = [v for v in face if v != p]
+        if status[a] != 'Visited' or status[b] != 'Visited':
+            continue
+
+        ua, ub = float(u[a]), float(u[b])
+        xa = points[a].astype(np.float64)
+        xb = points[b].astype(np.float64)
+
+        va = xa - xp
+        vb = xb - xp
+        X = np.stack((va, vb), axis=1)
+
+        XtX = X.T @ X
+        try:
+            Q = np.linalg.pinv(XtX)
+        except np.linalg.LinAlgError:
+            continue
+
+        ones = np.ones(2)
+        t = np.array([ua, ub])
+        delta = ones @ Q @ t
+        A = ones @ Q @ ones
+        B = t @ Q @ t - 1
+        discriminant = delta ** 2 - A * B
+
+        if discriminant >= 0:
+            p_est = (delta + np.sqrt(discriminant)) / A
+            if p_est >= max(ua, ub) - epsilon and p_est < best_u:
+                best_u = p_est
+        else:
+            # Fallback: direct edge-based
+            neighbors = get_3_ring_visited_neighbors(p, graph, status, u, points, local_solver_model).to(device).double()  # shape: (4, N) with N ≤ 90
+            num_valid = neighbors.shape[1]
+            #if num_valid >= 15:
+            dp_model = local_solver_model_ring3(p, graph, status, u, points, faces, local_solver_model)
+            if dp_model < best_u:
+                print("ggggggggg")
+                best_u = dp_model
+            #dp0 = ua + np.linalg.norm(va)
+            #dp1 = ub + np.linalg.norm(vb)
+            #fallback_u = min(dp0, dp1)
+            #if fallback_u < best_u:
+            #    best_u = fallback_u
+
+    # Final fallback to Dijkstra-style
+    if best_u == np.inf:
+        best_u = min(
+            u[n] + np.linalg.norm(points[p] - points[n])
+            for n in range(len(points))
+            if status[n] == 'Visited'
+        )
+
+    return best_u
+
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+
+
+def FMM_with_local_solver(graph: csr_matrix, points, faces, source_points, local_solver, local_solver_model=None):  #Implementation of the "real" FMM
     n_points = graph.shape[0]
     u = np.full(n_points, np.inf)
     status = np.full(n_points, 'Unvisited', dtype=object)
@@ -142,17 +264,16 @@ def FMM_with_local_solver(graph: csr_matrix, points, source_points, local_solver
         _, p = heapq.heappop(heap)
         if status[p] == 'Visited':
             continue
-
-        u[p] = local_solver(p, graph, status, u, points, local_solver_model)
+        u[p] = local_solver(p, graph, status, u, points, faces, local_solver_model)
         status[p] = 'Visited'
 
         for neighbor in graph[p].nonzero()[1]:
             if status[neighbor] == 'Unvisited':
                 status[neighbor] = 'Wavefront'
-                u[neighbor] = local_solver(neighbor, graph, status, u, points, local_solver_model)
+                u[neighbor] = local_solver(neighbor, graph, status, u, points, faces, local_solver_model)
                 heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
             elif status[neighbor] == 'Wavefront':
-                new_distance = local_solver(neighbor, graph, status, u, points, local_solver_model)
+                new_distance = local_solver(neighbor, graph, status, u, points, faces, local_solver_model)
                 if new_distance < u[neighbor]:
                     u[neighbor] = new_distance
                     heapq.heappush(heap, (u[p] + graph[p, neighbor], neighbor))
@@ -177,7 +298,7 @@ def true_distances(points, radius, source_idx):
 def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
     cache_dir = "plots"
     os.makedirs(cache_dir, exist_ok=True)
-    nsub_radius = make_spheres_radiuses_set(nsub=3, start_h=0.1, end_h=1.2, step=0.1) 
+    nsub_radius = make_spheres_radiuses_set(nsub=2, start_h=0.05, end_h=1.2, step=0.2) 
     h_vals = []
     l1_errors_dijkstra = []
     l1_errors_FMM=[]
@@ -190,18 +311,22 @@ def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
         #points = coordinates of each point
         #graph = (number of node a, number of node b, edge length between a and b)
         graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub) #radius=10, nsub=r
-        source_idxs = np.random.choice(len(points), size=5, replace=False) #randomly select points from the sphere
+        source_idxs = np.random.choice(len(points), size=1, replace=False) #randomly select points from the sphere
         print(f"h: {h}")
         #Load the local solver (the model)
         local_solver_saar = SpherePointNetRing()
-        local_solver_our = SpherePointNetRingAttentionAndConvolution2()
+        local_solver_saar = SpherePointNetRingAttentionAndConvolution() #<-------------------------------------
+        #local_solver_saar = SpherePointNetRingAttentionAndConvolution3() #<-------------------------------------
+        local_solver_our = SpherePointNetRingAttentionAndConvolution3() #<-------------------------------------
+        #local_solver_our = SpherePointNetRingAttentionAndConvolution()
+
         checkpoint_saar = torch.load(saar_model_path, map_location=device)
         checkpoint_our = torch.load(our_model_path, map_location=device)
         local_solver_saar.load_state_dict(checkpoint_saar["model_state_dict"])
-        local_solver_saar = local_solver_saar.to(device)
+        local_solver_saar = local_solver_saar.to(device).double().eval()
         local_solver_saar.eval()
         local_solver_our.load_state_dict(checkpoint_our["model_state_dict"])
-        local_solver_our = local_solver_our.to(device)
+        local_solver_our = local_solver_our.to(device).double().eval()
         local_solver_our.eval()
     
         l1_losses_dijkstra = []
@@ -217,19 +342,20 @@ def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
             if os.path.exists(dijkstra_path):
                 distances_dijkstra = np.load(dijkstra_path)
             else:
-                distances_dijkstra = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
+                distances_dijkstra = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_dijkstra)
                 np.save(dijkstra_path, distances_dijkstra)
             #------------
             # cache fmm
             if os.path.exists(fmm_path):
                 distances_FMM = np.load(fmm_path)
             else:
-                distances_FMM = fmm(V=points, F=faces, source_index=source_idx)
+                distances_FMM = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_triangle_geometric)
                 np.save(fmm_path, distances_FMM)
             #------------
                 
-            distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_saar)
-            distances_our_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_our)
+            distances_saar_model = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_model_ring3, local_solver_saar)
+            #distances_our_model = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_triangle_geometric_nn, local_solver_our) #<-------------------------------------
+            distances_our_model = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_model_ring3, local_solver_our)
             true_geodesic = true_distances(points, radius, source_idx)
             l1_losses_dijkstra.append(np.mean(np.abs(distances_dijkstra - true_geodesic)))
             l1_losses_FMM.append(np.mean(np.abs(distances_FMM - true_geodesic)))
@@ -246,8 +372,7 @@ def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
         l1_errors_saar_model.append(l1_loss_saar_model)
         l1_errors_our_model.append(l1_loss_our_model)
         h_vals.append(h)
-    
-    
+
     average_slope_dijkstra = np.mean(np.diff(np.log(l1_errors_dijkstra)) / np.diff(np.log(h_vals)))
     average_slope_FMM = np.mean(np.diff(np.log(l1_errors_FMM)) / np.diff(np.log(h_vals)))
     average_slope_saar_model = np.mean(np.diff(np.log(l1_errors_saar_model)) / np.diff(np.log(h_vals)))
@@ -259,9 +384,12 @@ def plot_convergence_comparison_sphere(saar_model_path, our_model_path):
     print(f"Average slope saar_model: {average_slope_saar_model:.3f}")
     print(f"Average slope our_model: {average_slope_our_model:.3f}")
 
-    plot_errors(h_vals, l1_errors_dijkstra, l1_errors_FMM, l1_errors_saar_model, l1_errors_our_model, labels=["Dijkstra", "FMM", "Saar model", "Our model"])
+    plot_errors(h_vals, l1_errors_dijkstra, l1_errors_FMM, l1_errors_saar_model, l1_errors_our_model, labels=["Dijkstra, ""FMM", "saar model", "Our model"], save_path=f"plots/nsub=3-comparison_our_and_our+FMM.png")
 
 
+#----------------------------------------------------------------------------
+#-------------------------Surface evaluation---------------------------------
+#----------------------------------------------------------------------------
 
 def evaluate_algorithms_on_mesh_with_ground_truth(
     graph, faces, points, h, source_idx, true_geodesic,
@@ -281,7 +409,8 @@ def evaluate_algorithms_on_mesh_with_ground_truth(
 
     # Load models
     local_solver_saar = SpherePointNetRing()
-    local_solver_our = SpherePointNetRingAttentionAndConvolution2()
+    local_solver_our = SpherePointNetRingAttentionAndConvolution3()  #<-------------------------------------
+    local_solver_our = SpherePointNetRing()
 
     checkpoint_saar = torch.load(saar_model_path, map_location=device)
     checkpoint_our = torch.load(our_model_path, map_location=device)
@@ -289,8 +418,8 @@ def evaluate_algorithms_on_mesh_with_ground_truth(
     local_solver_saar.load_state_dict(checkpoint_saar["model_state_dict"])
     local_solver_our.load_state_dict(checkpoint_our["model_state_dict"])
 
-    local_solver_saar = local_solver_saar.to(device).eval()
-    local_solver_our = local_solver_our.to(device).eval()
+    local_solver_saar = local_solver_saar.to(device).double().eval()
+    local_solver_our = local_solver_our.to(device).double().eval()
 
     # Run all solvers
     base = f"source{source_idx}"
@@ -299,19 +428,20 @@ def evaluate_algorithms_on_mesh_with_ground_truth(
     if os.path.exists(dijkstra_path):
         distances_dijkstra = np.load(dijkstra_path)
     else:
-        distances_dijkstra = FMM_with_local_solver(graph, points, [source_idx], local_solver_dijkstra)
+        distances_dijkstra = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_dijkstra)
         np.save(dijkstra_path, distances_dijkstra)
     #------------
     #cache for fmm
     fmm_path = os.path.join(report_path, f"{base}_fmm.npy")
     if os.path.exists(fmm_path):
+        print("Loading cached FMM distances")
         distances_FMM = np.load(fmm_path)
     else:
-        distances_FMM = fmm(V=points, F=faces, source_index=source_idx)
+        distances_FMM = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_triangle_geometric)
         np.save(fmm_path, distances_FMM)
     #------------
-    distances_saar_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_saar)
-    distances_our_model = FMM_with_local_solver(graph, points, [source_idx], local_solver_model_ring3, local_solver_our)
+    distances_saar_model = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_model_ring3, local_solver_saar)
+    distances_our_model = FMM_with_local_solver(graph, points, faces, [source_idx], local_solver_model_ring3, local_solver_our)
 
     # Compute L1 errors
     l1_dijkstra = np.mean(np.abs(distances_dijkstra - true_geodesic))
@@ -420,18 +550,19 @@ def test_on_surface(saar_model_path, our_model_path, report_path):
         return a * x**2 - b * y**2 + 0.2 * np.sin(twist * (x + y))
     surface_func = twist_saddle
     #caching of make_uniform_surface_multimesh result
-    mesh_cache_path = os.path.join(report_path, "cached_mesh.pkl")
+    spacing = 0.01
+    mesh_cache_path = os.path.join(report_path, f"cached_mesh_twist_saddle_{spacing}.pkl")
     if os.path.exists(mesh_cache_path):
         (graph_high_res, faces_high_res, points3d_high_res, mesh_high_res, h_high_res), sub_meshes, coor_to_index = load_pickle(mesh_cache_path)
     else:
         (graph_high_res, faces_high_res, points3d_high_res, mesh_high_res, h_high_res), sub_meshes, coor_to_index = \
-            make_uniform_surface_multimesh(f=surface_func, radius=5, spacing=0.05, sparse_strides=[10, 20])
+            make_uniform_surface_multimesh(f=surface_func, radius=5, spacing=spacing, sparse_strides=[10, 20])
         save_pickle(((graph_high_res, faces_high_res, points3d_high_res, mesh_high_res, h_high_res), sub_meshes, coor_to_index), mesh_cache_path)
     #---------
     graph_sparse, faces_sparse, points3d_sparse, mesh_sparse, h_sparse = sub_meshes[0]
     print(f'sparse resolution h = {h_sparse}')
     #caching of sparse source index
-    source_cache_path = os.path.join(report_path, "sparse_source_idx.pkl")
+    source_cache_path = os.path.join(report_path, f"sparse_source_idx_twist_saddle_{spacing}.pkl")
     if os.path.exists(source_cache_path):
         sparse_source_idx = load_pickle(source_cache_path)
     else:
@@ -439,13 +570,14 @@ def test_on_surface(saar_model_path, our_model_path, report_path):
         save_pickle(sparse_source_idx, source_cache_path)
     #----------
     high_res_source_idx = coor_to_index[tuple(points3d_sparse[sparse_source_idx])]
-    print("starting FMM")
     #caching of high res fmm run
-    dist_cache_path = os.path.join(report_path, "high_res_distances.npy")
+    dist_cache_path = os.path.join(report_path, f"high_res_distances_twist_saddle_{spacing}.npy")
     if os.path.exists(dist_cache_path):
+        print("Loading cached high res distances")
         distances_high_res = np.load(dist_cache_path)
     else:
-        distances_high_res = fmm(V=points3d_high_res, F=faces_high_res, source_index=high_res_source_idx)
+        print("Calculating high res distances")
+        distances_high_res = FMM_with_local_solver(graph_high_res, points3d_high_res, faces_high_res, [high_res_source_idx], local_solver_triangle_geometric)
         np.save(dist_cache_path, distances_high_res)
     #------------
     sparse_points_tuples = [tuple(p) for p in points3d_sparse]
@@ -455,21 +587,89 @@ def test_on_surface(saar_model_path, our_model_path, report_path):
 
     #Write the results to a file
     os.makedirs(report_path, exist_ok=True)
-    output_file = os.path.join(report_path, "surface_eval_results.txt")
+    output_file = os.path.join(report_path, f"surface_eval_results_twist_saddle_{spacing}.txt")
     with open(output_file, "w") as f:
         f.write(f"h value: {h_sparse}\n")
-        f.write(f"✅ L1 error - Dijkstra:    {evaluations[0]:.6f}\n")
-        f.write(f"✅ L1 error - FMM (C++):   {evaluations[1]:.6f}\n")
-        f.write(f"✅ L1 error - Saar Model:  {evaluations[2]:.6f}\n")
-        f.write(f"✅ L1 error - Our Model:   {evaluations[3]:.6f}\n")
+        f.write(f" L1 error - Dijkstra:    {evaluations[0]:.6f}\n")
+        f.write(f" L1 error - FMM (C++):   {evaluations[1]:.6f}\n")
+        f.write(f" L1 error - Saar Model:  {evaluations[2]:.6f}\n")
+        f.write(f" L1 error - Our Model:   {evaluations[3]:.6f}\n")
         
-        
-        
+
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+
+#----------------------------------------------------------------------------
+#----------------------only plot on surface----------------------------------
+#----------------------------------------------------------------------------
+    
+def visualize_algorithms_on_surface(saar_model_path, our_model_path, report_path):
+    random.seed(42)
+    np.random.seed(42)
+
+    def twist_saddle(x, y):
+        a = 1
+        b = 1
+        twist = 1
+        return 0.2 * (a * x**2 - b * y**2 + np.sin(twist * (x + y)))
+
+    surface_func = twist_saddle
+    spacing = 0.005
+
+    (graph_high_res, faces_high_res, points3d_high_res, mesh_high_res, h_high_res), sub_meshes, coor_to_index = \
+            make_uniform_surface_multimesh(f=surface_func, radius=5, spacing=spacing, sparse_strides=[10, 20])
+    graph_sparse, faces_sparse, points3d_sparse, mesh_sparse, h_sparse = sub_meshes[0]
+    print(f'sparse resolution h = {h_sparse}')
+    sparse_source_idx = random.randint(0, len(points3d_sparse) - 1)
+
+    # Load models
+    local_solver_saar = SpherePointNetRingAttentionAndConvolution() #<-------------------------------------
+    checkpoint_saar = torch.load(saar_model_path, map_location=device)
+    local_solver_saar.load_state_dict(checkpoint_saar["model_state_dict"])
+    local_solver_saar = local_solver_saar.to(device).eval()
+
+    local_solver_our = SpherePointNetRingAttentionAndConvolution() #<-------------------------------------
+    checkpoint_our = torch.load(our_model_path, map_location=device)
+    local_solver_our.load_state_dict(checkpoint_our["model_state_dict"])
+    local_solver_our = local_solver_our.to(device).eval()
+
+    # Run all methods on the sparse mesh
+    #distances_dijkstra = FMM_with_local_solver(graph_sparse, points3d_sparse, faces_sparse, [sparse_source_idx], local_solver_dijkstra)
+    distances_fmm = FMM_with_local_solver(graph_sparse, points3d_sparse, faces_sparse, [sparse_source_idx], local_solver_triangle_geometric)
+    #distances_saar = FMM_with_local_solver(graph_sparse, points3d_sparse, faces_sparse, [sparse_source_idx], local_solver_model_ring3, local_solver_saar)
+    #distances_our = FMM_with_local_solver(graph_sparse, points3d_sparse, faces_sparse, [sparse_source_idx], local_solver_model_ring3, local_solver_our)
+
+    # Plot results
+    def plot_surface(mesh, distances, title):
+        mesh["GeodesicDistance"] = distances
+        plotter = pv.Plotter()
+        plotter.add_text(title, font_size=12)
+        plotter.add_mesh(mesh, scalars="GeodesicDistance", cmap="viridis", show_edges=False)
+        plotter.set_scale(xscale=1.0, yscale=1.0, zscale=1.0)  # ensures equal scaling
+        plotter.show()
+
+    print("Plotting Dijkstra...")
+    #plot_surface(mesh_sparse.copy(), distances_dijkstra, "Dijkstra")
+
+    print("Plotting FMM...")
+    plot_surface(mesh_sparse.copy(), distances_fmm, "FMM")
+
+    print("Plotting Saar Model...")
+    #plot_surface(mesh_sparse.copy(), distances_saar, "Saar Model")
+
+    print("Plotting Our Model...")
+    #plot_surface(mesh_sparse.copy(), distances_our, "Our Model")
+
+
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
 
 if __name__ == "__main__": #With caching!
-    plot_convergence_comparison_sphere(saar_model_path="checkpoints/Good_isosphere_98_epochs.pt", our_model_path="checkpoints/sphere_pointnet_epoch2_loss5.929734881480091e-05.pt")
-    test_on_surface(saar_model_path="checkpoints/Good_isosphere_98_epochs.pt", our_model_path="checkpoints/sphere_pointnet_epoch2_loss5.929734881480091e-05.pt", report_path="plots/")
-
+    plot_convergence_comparison_sphere(saar_model_path="DeepEikonal\checkpoints\omer_try9.pt", our_model_path="DeepEikonal\checkpoints\sphere_pointnet_epoch0_loss0.0005209930397334362.pt")
+    #test_on_surface(saar_model_path="DeepEikonal\checkpoints\arbitrary-saar.pt", our_model_path="DeepEikonal/checkpoints/sphere_pointnet_epoch0_loss6.797210162510234e-08.pt", report_path="plots/")
+    #visualize_algorithms_on_surface(saar_model_path=r"DeepEikonal\checkpoints\omer_try9.pt", our_model_path=r"DeepEikonal\checkpoints\omer_try9.pt", report_path="plots/")
 
 
 
