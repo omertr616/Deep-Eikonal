@@ -670,7 +670,7 @@ if __name__ == "__main__": #With caching!
     plot_convergence_comparison_sphere(saar_model_path="DeepEikonal\checkpoints\omer_try9.pt", our_model_path="DeepEikonal\checkpoints\sphere_pointnet_epoch0_loss0.0005209930397334362.pt")
     #test_on_surface(saar_model_path="DeepEikonal\checkpoints\arbitrary-saar.pt", our_model_path="DeepEikonal/checkpoints/sphere_pointnet_epoch0_loss6.797210162510234e-08.pt", report_path="plots/")
     #visualize_algorithms_on_surface(saar_model_path=r"DeepEikonal\checkpoints\omer_try9.pt", our_model_path=r"DeepEikonal\checkpoints\omer_try9.pt", report_path="plots/")
-
+#
 
 
 
