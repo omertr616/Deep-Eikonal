@@ -8,7 +8,7 @@ import os
 import random
 
 # ---------- Config ----------
-OUTPUT_DIR = "high_resolution/generated_spheres/train_spheres"
+OUTPUT_DIR = "unit_spheres"
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -62,12 +62,13 @@ def make_spheres_radiuses_set(nsub=4, start_h=0.1, end_h=1.6, step=0.1):   #to c
     return nsub_radises
 
 def generate_dataset(save_dir):
-    for i in range (1, 7): #range for nsub
-        nsub_radius = make_spheres_radiuses_set(nsub=i, start_h=0.1, end_h=1.6, step=0.1)
+    for i in range (1, 2): #range for nsub
+        # nsub_radius = make_spheres_radiuses_set(nsub=i, start_h=0.1, end_h=1.6, step=0.1)
+        nsub_radius = [(1.0, 5)]
         for radius, nsub in nsub_radius: #for the specific nsub, play with the radius to get h between 0.1 and something
-            for j in range(10): #make x random sources for this ball
-                graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
-                source_idx = random.randint(0, len(points) - 1)
+            graph, faces, points, sphere, h = make_sphere(radius=radius, nsub=nsub)
+            source_idxs = np.random.choice(len(points), size=20, replace=False) #randomly select points from the sphere
+            for source_idx in source_idxs:
                 distances = true_distances(points, radius, source_idx)
 
                 filename = f"sphere_radius_{radius}_nsub_{nsub}_source_{source_idx}.txt"
